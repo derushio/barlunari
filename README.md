@@ -94,3 +94,7 @@ swift run menudate-snapshots .playwright/snapshots # 画面の見た目を PNG �
 ```
 
 テストとスナップショットは、画面にウインドウを表示せず、フォーカスも奪いません。設計は戦術的 DDD のレイヤードアーキテクチャで、外部ライブラリは使いません。開発の規則は [CLAUDE.md](CLAUDE.md) にあります。
+
+## ライセンス
+
+[MIT License](LICENSE)
