@@ -397,9 +397,28 @@ final class Harness {
         return event
     }
 
+    /// 不変条件: スクロールの動きは、`NSScrollView` の内部が `NSView.displayLink` の更新で進める。パネルが隠れている、またはディスプレイが消灯していると
+    /// 更新が来ず、イベントを渡してもエラーを出さずに何も動かない。そのため、スクロールを送る前に更新が来ることを確かめ、来なければエラーにする。
+    private func requireDisplayLink() async throws {
+        final class Probe: NSObject {
+            nonisolated(unsafe) var ticks = 0
+            @objc func tick(_ link: CADisplayLink) { ticks += 1 }
+        }
+        let probe = Probe()
+        let link = hosting.displayLink(target: probe, selector: #selector(Probe.tick(_:)))
+        link.add(to: .main, forMode: .common)
+        defer { link.invalidate() }
+        let deadline = Date(timeIntervalSinceNow: 0.25)
+        while probe.ticks == 0, Date() < deadline { await pump(0.004) }
+        if probe.ticks == 0 {
+            throw DriverError.message("ディスプレイの更新が来ない。パネルが隠れているか、ディスプレイが消灯している間は NSScrollView のスクロールが反映されないので、show で出すか、ディスプレイを点灯させてから送る")
+        }
+    }
+
     /// `dy` の符号は `NSEvent.scrollingDeltaY` と同じ。正で内容が下へ動き、一覧は先頭側へ戻る。
     func scroll(x: Double, y: Double, dy: Double, kind: ScrollKind) async throws {
         let point = try windowPoint(x, y)
+        try await requireDisplayLink()
         switch kind {
         case .wheel:
             deliverScroll(try scrollEvent(point: point, dy: dy, continuous: false, phase: 0, momentum: 0))
