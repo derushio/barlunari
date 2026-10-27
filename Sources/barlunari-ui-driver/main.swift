@@ -6,9 +6,9 @@ import Foundation
 
 let usage = """
 使い方:
-  barlunari-ui-driver serve <セッションのディレクトリ> [--dense]
+  barlunari-ui-driver serve <セッションのディレクトリ> [--dense|colorful]
   barlunari-ui-driver send <セッションのディレクトリ> "<コマンド>"
-コマンド: chain <コマンド> ; <コマンド> / click <x> <y> / hover <x> <y> / scroll <x> <y> <dy> [trackpad|wheel|fling|drag] / key escape|cmd+1|cmd+2 / remote-add <タイトル> / store-change <回数> / wake / hide / show / placement <user|single> <x> <y> [compact] / wait <ms> / screenshot <名前> / quit
+コマンド: chain <コマンド> ; <コマンド> / click <x> <y> / hover <x> <y> / scroll <x> <y> <dy> [trackpad|wheel|fling|drag] / key escape|cmd+1|cmd+2 / remote-add <タイトル> / store-change <回数> / wake / appearance light|dark / hide / show / placement <user|single> <x> <y> [compact] / wait <ms> / screenshot <名前> / quit
 """
 
 func fail(_ message: String, code: Int32 = 1) -> Never {
@@ -19,8 +19,12 @@ func fail(_ message: String, code: Int32 = 1) -> Never {
 let arguments = CommandLine.arguments
 guard arguments.count >= 3 else { fail(usage, code: 2) }
 let directory = URL(fileURLWithPath: arguments[2], isDirectory: true)
-/// `serve` の `--dense` は、予定の多いデータ（`SampleData.denseMonthViewEvents`）で起動する。
-let isDense = arguments.count == 4 && arguments[3] == "--dense"
+/// `serve` の `--dense` は予定の多いデータ（`SampleData.denseMonthViewEvents`）、`colorful` は色の多いデータ（`ColorfulSampleData`）で起動する。
+let dataSet: Harness.DataSet? = switch arguments.count == 4 ? arguments[3] : nil {
+case "--dense": .dense
+case "colorful", "--colorful": .colorful
+default: nil
+}
 
 switch arguments[1] {
 case "send":
@@ -33,7 +37,7 @@ case "send":
         fail("\(error)")
     }
 case "serve":
-    guard arguments.count == 3 || isDense else { fail(usage, code: 2) }
+    guard arguments.count == 3 || dataSet != nil else { fail(usage, code: 2) }
     NSApplication.shared.setActivationPolicy(.prohibited)
     // トップレベルの await（swift_task_asyncMainDrainQueue）は、AppKit のボタンの追跡ループが抜けるときに
     // ランループが止まると、プロセスごと終了する。そのため、ランループは自前で回し続け、処理は Task で動かす。
@@ -47,7 +51,7 @@ case "serve":
             }
             let requests = try Session.requests(directory: directory)
             let cpuBeforeInit = processCPUMilliseconds()
-            let driver = await Driver(directory: directory, dense: isDense)
+            let driver = await Driver(directory: directory, dataSet: dataSet ?? .standard)
             // 起動時の初期化（ポップオーバーの組み立て、最初の読み込み、表示が落ち着くまでの待ち）の CPU 時間。
             let cpuInit = processCPUMilliseconds() - cpuBeforeInit
             print("ready \(directory.path) cpuInit=\(String(format: "%.1f", cpuInit)) cpuProcess=\(String(format: "%.1f", processCPUMilliseconds()))")

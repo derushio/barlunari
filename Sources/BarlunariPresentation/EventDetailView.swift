@@ -8,6 +8,7 @@ struct EventDetailView: View {
     static let maxHeight: CGFloat = 300
 
     let detail: EventDetailState
+    @Environment(\.colorScheme) private var colorScheme
     let onBack: () -> Void
     /// 内容の高さの上限。コンパクト表示は既定の `maxHeight`、月表示の右側のパネルは、パネルの高さに合わせて渡す。
     var contentMaxHeight: CGFloat = Self.maxHeight
@@ -53,7 +54,7 @@ struct EventDetailView: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .top, spacing: 8) {
                 RoundedRectangle(cornerRadius: 1.5)
-                    .fill(detail.color?.swiftUIColor ?? Color.gray)
+                    .fill(detail.color.paletteRoles(colorScheme).fillColor)
                     .frame(width: 3)
                     .accessibilityHidden(true)
                 Text(detail.title)

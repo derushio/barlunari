@@ -207,28 +207,7 @@ private struct DayScheduleContent: View {
         ScrollView {
             VStack(spacing: 3) {
                 ForEach(items) { item in
-                    Button { viewModel.showDetail(of: item.id) } label: {
-                        HStack(spacing: 6) {
-                            Text(item.title).font(.callout).lineLimit(1)
-                            Spacer(minLength: 0)
-                        }
-                        .padding(.horizontal, 8)
-                        .frame(height: 22)
-                        .background(RoundedRectangle(cornerRadius: 4).fill((item.color?.swiftUIColor ?? .gray).opacity(item.id == selectedID ? 0.4 : 0.28)))
-                        .overlay {
-                            if item.id == selectedID {
-                                RoundedRectangle(cornerRadius: 4).strokeBorder(item.color?.swiftUIColor ?? .gray, lineWidth: 2)
-                            }
-                        }
-                        .overlay(alignment: .leading) {
-                            RoundedRectangle(cornerRadius: 1.5).fill(item.color?.swiftUIColor ?? .gray).frame(width: 3).padding(.vertical, 1)
-                        }
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .opacity(item.isPast ? 0.45 : 1)
-                    .accessibilityLabel(item.accessibilityLabel)
-                    .accessibilityHint("予定の詳細を開きます")
+                    AllDayItemRow(item: item, isSelected: item.id == selectedID) { viewModel.showDetail(of: item.id) }
                 }
             }
         }
@@ -256,6 +235,42 @@ private struct DayScheduleContent: View {
         }
     }
 }
+
+/// 終日の予定 1 件の行。外観に合わせたパレットの色で、薄い背景、枠線、左端の線を描く。
+private struct AllDayItemRow: View {
+    let item: DayScheduleItem
+    let isSelected: Bool
+    let action: () -> Void
+
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        let roles = item.color.paletteRoles(colorScheme)
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Text(item.title).font(.callout).lineLimit(1)
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 8)
+            .frame(height: 22)
+            .background(RoundedRectangle(cornerRadius: 4).fill(isSelected ? roles.selectedTintColor : roles.tintColor))
+            .overlay {
+                if isSelected {
+                    RoundedRectangle(cornerRadius: 4).strokeBorder(roles.accentColor, lineWidth: 2)
+                }
+            }
+            .overlay(alignment: .leading) {
+                RoundedRectangle(cornerRadius: 1.5).fill(roles.accentColor).frame(width: 3).padding(.vertical, 1)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .opacity(item.isPast ? CalendarPalette.pastOpacity : 1)
+        .accessibilityLabel(item.accessibilityLabel)
+        .accessibilityHint("予定の詳細を開きます")
+    }
+}
+
 
 /// 時間軸の中身。上下の余白を含む高さの 1 つの `Canvas` で描き、クリックは全体で 1 つのジェスチャーにして、位置からブロックを求める。
 ///
@@ -335,15 +350,15 @@ private struct DayTimelineCanvas: View {
     /// 収まらない文字はブロックの端で切る。
     private static func draw(_ block: DayScheduleBlock, isSelected: Bool, in context: inout GraphicsContext) {
         let frame = frame(of: block)
-        let color = block.item.color?.swiftUIColor ?? Color.gray
+        let roles = block.item.color.paletteRoles(context.environment.colorScheme)
         let shape = Path(roundedRect: frame, cornerRadius: 4)
         context.drawLayer { layer in
-            if block.item.isPast { layer.opacity = 0.45 }
+            if block.item.isPast { layer.opacity = CalendarPalette.pastOpacity }
             layer.clip(to: shape)
-            layer.fill(shape, with: .color(color.opacity(isSelected ? 0.4 : 0.22)))
-            layer.fill(Path(CGRect(x: frame.minX, y: frame.minY, width: 3, height: frame.height)), with: .color(color))
+            layer.fill(shape, with: .color(isSelected ? roles.selectedTintColor : roles.tintColor))
+            layer.fill(Path(CGRect(x: frame.minX, y: frame.minY, width: 3, height: frame.height)), with: .color(roles.accentColor))
             // 詳細を出している予定は、予定の色の枠線（2pt）で強調する。ブロックの形で切るので、外側の半分は切れる。内側に 2pt 入れて描く。
-            if isSelected { layer.stroke(Path(roundedRect: frame.insetBy(dx: 1, dy: 1), cornerRadius: 3), with: .color(color), lineWidth: 2) }
+            if isSelected { layer.stroke(Path(roundedRect: frame.insetBy(dx: 1, dy: 1), cornerRadius: 3), with: .color(roles.accentColor), lineWidth: 2) }
             let textRect = CGRect(x: frame.minX + 8, y: frame.minY + 1, width: max(0, frame.width - 13), height: max(0, frame.height - 2))
             let time = Text(verbatim: block.item.timeText).font(.caption2.monospacedDigit()).foregroundStyle(Color.secondary)
             if frame.height >= 40 {

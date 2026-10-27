@@ -114,7 +114,7 @@ private struct WeekRowView: View {
             dotContext.opacity = state.isInMonth ? 1 : 0.4
             for (index, color) in dots.enumerated() {
                 let x = centerX - dotsWidth / 2 + CGFloat(index) * (dotSize + dotSpacing)
-                dotContext.fill(Path(ellipseIn: CGRect(x: x, y: dotsTop, width: dotSize, height: dotSize)), with: .color(color.swiftUIColor))
+                dotContext.fill(Path(ellipseIn: CGRect(x: x, y: dotsTop, width: dotSize, height: dotSize)), with: .color(color.paletteRoles(context.environment.colorScheme).accentColor))
             }
         }
     }

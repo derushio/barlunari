@@ -87,13 +87,14 @@ struct AgendaRowView: View {
     let onShowDetail: () -> Void
 
     @State private var isHovering = false
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         HStack(alignment: .center, spacing: 8) {
             Button(action: onShowDetail) {
                 HStack(alignment: .top, spacing: 8) {
                     RoundedRectangle(cornerRadius: 1.5)
-                        .fill(state.color?.swiftUIColor ?? Color.gray)
+                        .fill(state.color.paletteRoles(colorScheme).accentColor)
                         .frame(width: 3)
                     VStack(alignment: .leading, spacing: 1) {
                         Text(state.timeText).font(.caption2).foregroundStyle(.secondary).monospacedDigit()
@@ -126,7 +127,7 @@ struct AgendaRowView: View {
             }
         }
         .fixedSize(horizontal: false, vertical: true)
-        .opacity(state.isPast ? 0.45 : 1)
+        .opacity(state.isPast ? CalendarPalette.pastOpacity : 1)
     }
 }
 

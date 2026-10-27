@@ -409,11 +409,12 @@ enum MonthWeekPainter {
 
     /// 文字の色。解決した文字の記憶のキーにするため、`Color` でなくこの列挙で持つ。
     private enum TextColor: Hashable {
-        case white, primary, secondary, red, blue
+        case white, ink, primary, secondary, red, blue
 
         var value: Color {
             switch self {
             case .white: Color.white
+            case .ink: Color(hex: 0x141414)
             case .primary: Color.primary
             case .secondary: Color.secondary
             case .red: Color.red
@@ -483,8 +484,8 @@ enum MonthWeekPainter {
 
     private static func draw(_ item: MonthWeekLayout.Item, in context: inout GraphicsContext, geometry: MonthRowGeometry) {
         var context = context
-        if item.isPast { context.opacity = 0.45 }
-        let color = item.color?.swiftUIColor ?? Color.gray
+        if item.isPast { context.opacity = CalendarPalette.pastOpacity }
+        let roles = item.color.paletteRoles(context.environment.colorScheme)
         let lane = geometry.laneRect(lane: item.lane, columns: item.columns)
         let row = CGRect(x: lane.minX, y: lane.minY + 1, width: lane.width, height: barHeight)
         switch item.kind {
@@ -499,14 +500,14 @@ enum MonthWeekPainter {
                 bottomTrailingRadius: continuesToNext ? 0 : barRadius,
                 topTrailingRadius: continuesToNext ? 0 : barRadius
             )
-            context.fill(shape.path(in: bar), with: .color(color))
+            context.fill(shape.path(in: bar), with: .color(roles.fillColor))
             drawText(
-                item.title, style: .title, color: .white, in: &context,
+                item.title, style: .title, color: roles.onFill == 0xFFFFFF ? .white : .ink, in: &context,
                 from: bar.minX + 6, to: bar.maxX - 4, midY: bar.midY
             )
         case .timed(let timeText):
             let dot = CGRect(x: row.minX + 4, y: row.midY - dotSize / 2, width: dotSize, height: dotSize)
-            context.fill(Path(ellipseIn: dot), with: .color(color))
+            context.fill(Path(ellipseIn: dot), with: .color(roles.accentColor))
             let timeX = dot.maxX + 4
             let timeWidth = drawText(
                 timeText, style: .time, color: .secondary, in: &context,

@@ -55,6 +55,7 @@ private struct GeneralSettingsTab: View {
 }
 
 private struct CalendarsSettingsTab: View {
+    @Environment(\.colorScheme) private var colorScheme
     @Bindable var viewModel: SettingsViewModel
 
     var body: some View {
@@ -89,7 +90,7 @@ private struct CalendarsSettingsTab: View {
                     Section(section.title) {
                         ForEach(section.items) { item in
                             HStack(spacing: 8) {
-                                Circle().fill(item.calendar.color.swiftUIColor).frame(width: 10, height: 10)
+                                Circle().fill(item.calendar.color.paletteRoles(colorScheme).accentColor).frame(width: 10, height: 10)
                                 Text(item.calendar.name)
                                 Spacer()
                                 Toggle(item.calendar.name, isOn: Binding(

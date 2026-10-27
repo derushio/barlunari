@@ -50,6 +50,7 @@ description: Barlunari のテストを書く・実行するとき、フェイク
 
 1. `swift run barlunari-snapshots .playwright/snapshots` を実行する。画面に出さないオフスクリーンの `NSWindow` に `NSHostingView` を入れ、`cacheDisplay` で PNG にする。`NSApplication.shared.setActivationPolicy(.prohibited)` を呼ぶので、前面にもキーにもならず、利用者のフォーカスを奪わない。`makeKeyAndOrderFront` と `activate` は呼ばない
 2. 複数のアカウントの見た目は、アカウントごとのセクションのカレンダータブの PNG で確かめる。許可が未決定、拒否、カレンダーなしの案内は、ポップオーバーと設定のカレンダータブの PNG で確かめる。予定の詳細は `popover-detail-light`、`popover-detail-dark`、`popover-detail-minimal` で確かめる。表示するカレンダーの一覧は `month-calendars-light`、`month-calendars-dark`、`popover-calendars-light`、`popover-calendars-dark` で確かめる。狭い画面の 2 列は `month-two-column-light`、`month-two-column-detail-light`、`month-two-column-calendars-light` で確かめる。3 列の月表示は、詳細の列の空の状態を `month-light`、詳細を `month-detail-*`、一覧を `month-calendars-*` で確かめ、ほかに `month-light`、`month-dark`、`month-detail-light`、`month-detail-dark`、`month-day-today`（今日の線）、`month-day-events`、`month-day-events-detail`（日の欄の詳細）、`month-day-overlap-light`、`month-day-overlap-dark`（重なる予定と終日の予定）、`month-day-events-empty`、`month-day-dense`、`month-next-month`、`month-not-determined`、`month-denied`、`month-error`、`month-loading` で確かめる。詳細の内容がスクロールで切れる長さのときは、`EventDetailView.maxHeight` を一時的に大きくして全項目を描き、確かめた後に戻す
+   カラーパレットは `palette-light`、`palette-dark`（全色を役割ごとに並べた一覧）、多色のカレンダーの月表示は `month-colorful-light`、`month-colorful-dark` で確かめる
 3. 出力された PNG を Read ツールで開き、意図した見た目かを自分の目で確かめる。寸法の数値だけで完了にしない
 4. 崩れや欠けがあれば View を直し、1 から繰り返す
 5. 新しい画面や状態を足したときは、`barlunari-snapshots` にも追加する。ViewModel は `Fixture` が PreviewSupport のフェイクで組み立てる
@@ -62,6 +63,7 @@ description: Barlunari のテストを書く・実行するとき、フェイク
 
 1. `swift build --product barlunari-ui-driver` でビルドする
 2. Bash ツールの `run_in_background: true` で、`serve` を 1 回だけ起動する。コマンドは `<worktree の絶対パス>/.build/debug/barlunari-ui-driver serve <worktree の絶対パス>/.playwright/ui` のように、絶対パスで書く。起動時に、そのディレクトリの古い PNG、ログ、パイプを削除する。`rm` は使わない
+   色の見やすさを確かめるときは、末尾に `colorful` を付ける（`serve <ディレクトリ> colorful`）。明るい色、暗い色、低彩度の色を含む 28 のカレンダーと、それぞれの予定を持つ `ColorfulSampleData` を使う。外観は `appearance light|dark` で切り替える
    予定の多いデータで測るときは、末尾に `--dense` を付ける（`serve <ディレクトリ> --dense`）。選べる全日に時刻付きの予定が 3〜8 件、週ごとに終日や複数日の予定が 2〜3 件、長いタイトルもある。`SampleData.denseMonthViewEvents` を使う。付けなければ `SampleData.monthViewEvents` である
 3. 1 回の Bash 呼び出しで 1 操作だけ、前面で `send` を実行する。`send` は `serve` の準備ができるまで待ち、操作の結果が出たら 1 行を返す
 
@@ -88,6 +90,7 @@ description: Barlunari のテストを書く・実行するとき、フェイク
 | `remote-add <タイトル>` | サーバーにだけある予定を、選択日の 14 時から 1 時間の予定として 1 件用意する。この時点ではローカルに届かず、パネルに出ない。`show` でパネルを出し直す、更新ボタンを押す、`wake` を送るなどで次に同期を求められたとき、ローカルへ入り、`.calendarStoreDidChange` が送られて読み直される |
 | `store-change <回数>` | `.calendarStoreDidChange` を指定した回数、続けて送る。読み直しは進行中の取得を取り消さず 1 回にまとまるので、`取得=` は増えても 1 か 2 である。同期は求めない |
 | `wake` | 注入したワークスペースの通知センターに `NSWorkspace.didWakeNotification` を送る。同期を求め、読み直す |
+| `appearance light\|dark` | パネルの外観を切り替える。既定はライト。パレットの色の役割（塗り、薄い背景、点と線）がライトとダークで切り替わることを確かめる |
 | `hide` / `show` | パネルを隠して出し直す。`hide` はアプリの `MenuBarController.close` と同じ `orderOut`、`show` は同じインスタンスを出し直し、`popoverDidAppear()` を呼ぶ。アプリではパネルが key になったときに `popoverDidAppear()` が呼ばれる。アプリは `orderFrontRegardless` と `makeKey` で出すが、操作ツールは完全に透明・背面・key にしない設定を保つため `orderBack` で出す。ウインドウが隠れたときと出たときの処理（先に用意した画像を捨てる、出た直後の先の用意）を再現する。性能の計測では `chain hide ; wait 300 ; show ; wait 3500 ; scroll ... drag` のように使う |
 | `placement <user\|single> <x> <y> [compact]` | 仮想のディスプレイの配置（`user` は利用者の 3 枚、`single` は 1 枚。座標は画面座標で左下原点）とクリックの位置から、パネルのフレームを返す。ウインドウは作らず、何も出さない |
 | `screenshot <名前>` | 操作せずに撮る |

@@ -158,8 +158,11 @@ private struct CheckboxButton: NSViewRepresentable {
     private static func attributedTitle(_ title: String, swatch: CalendarColor, isBold: Bool) -> NSAttributedString {
         let diameter: CGFloat = 10
         let image = NSImage(size: NSSize(width: diameter, height: diameter), flipped: false) { rect in
+            // 描く時点の外観で色を選ぶ。ライトとダークが切り替わっても、画像を作り直さずに合う。
+            let isDark = NSAppearance.currentDrawing().bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+            let hex = CalendarPalette.color(for: swatch).roles(isDark: isDark).accent
             NSColor(
-                srgbRed: CGFloat(swatch.red) / 255, green: CGFloat(swatch.green) / 255, blue: CGFloat(swatch.blue) / 255, alpha: 1
+                srgbRed: CGFloat(hex >> 16 & 0xFF) / 255, green: CGFloat(hex >> 8 & 0xFF) / 255, blue: CGFloat(hex & 0xFF) / 255, alpha: 1
             ).setFill()
             NSBezierPath(ovalIn: rect).fill()
             return true

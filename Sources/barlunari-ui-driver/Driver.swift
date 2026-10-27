@@ -27,9 +27,9 @@ final class Driver {
     private let harness: Harness
     private var step = 0
 
-    init(directory: URL, dense: Bool = false) async {
+    init(directory: URL, dataSet: Harness.DataSet = .standard) async {
         self.directory = directory
-        harness = await Harness(dense: dense)
+        harness = await Harness(dataSet: dataSet)
     }
 
     /// `chain <コマンド> ; <コマンド> ; ...` は、最後のコマンドの前の操作では、表示が落ち着くまで待たず、PNG も撮らずに次へ進む。
@@ -94,6 +94,10 @@ final class Driver {
                 harness.postStoreChanges(count: count)
             case "wake":
                 harness.postWake()
+            case "appearance":
+                guard words.count == 2, ["light", "dark"].contains(words[1]) else { throw DriverError.message("使い方: appearance light|dark") }
+                harness.setAppearance(dark: words[1] == "dark")
+                label = "appearance-\(words[1])"
             case "hide":
                 harness.hidePanel()
             case "show":

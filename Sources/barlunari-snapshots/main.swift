@@ -190,6 +190,22 @@ func runSnapshots(outputDirectory: URL) async throws {
         try await render(MenuBarLabelView().padding(12), appearance: appearance, to: output(name))
     }
 
+    // カラーパレットの一覧（全色を役割ごとに並べる）。
+    for (name, appearance) in [("palette-light", NSAppearance.Name.aqua), ("palette-dark", .darkAqua)] {
+        try await render(CalendarPalettePreviewView(), appearance: appearance, to: output(name))
+    }
+
+    // 明るい色、暗い色、低彩度の色を含む多数のカレンダーの月表示。
+    for (name, appearance) in [("month-colorful-light", NSAppearance.Name.aqua), ("month-colorful-dark", .darkAqua)] {
+        let fixture = Fixture(
+            accounts: ColorfulSampleData.accounts, calendars: ColorfulSampleData.calendars,
+            events: ColorfulSampleData.events, displayMode: .month
+        )
+        fixture.popover.reload()
+        await fixture.popover.waitForLoad()
+        try await render(popoverView(fixture), appearance: appearance, to: output(name))
+    }
+
     // ポップオーバー（読み込み済み）
     for (name, appearance) in [("popover-light", NSAppearance.Name.aqua), ("popover-dark", .darkAqua)] {
         let fixture = Fixture()

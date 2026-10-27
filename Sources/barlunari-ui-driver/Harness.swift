@@ -50,11 +50,29 @@ final class Harness {
     }
     private var eventNumber = 0
 
-    init(dense: Bool = false) async {
+    /// 起動時に使う予定とカレンダーのデータ。
+    enum DataSet {
+        /// `SampleData.monthViewEvents`
+        case standard
+        /// `SampleData.denseMonthViewEvents`。予定の多い月で性能を測る。
+        case dense
+        /// `ColorfulSampleData`。明るい色、暗い色、低彩度の色を含む多数のカレンダーで、色の見やすさを確かめる。
+        case colorful
+    }
+
+    init(dataSet: DataSet = .standard) async {
         let dateProvider = FixedDateProvider()
         let authorizer = FakeCalendarAccessAuthorizer(status: .fullAccess)
-        let calendarRepository = InMemoryCalendarRepository(accounts: SampleData.accounts, calendars: SampleData.calendars)
-        let eventRepository = SyncableEventRepository(events: dense ? SampleData.denseMonthViewEvents : SampleData.monthViewEvents)
+        let calendarRepository = InMemoryCalendarRepository(
+            accounts: dataSet == .colorful ? ColorfulSampleData.accounts : SampleData.accounts,
+            calendars: dataSet == .colorful ? ColorfulSampleData.calendars : SampleData.calendars
+        )
+        let events: [CalendarEvent] = switch dataSet {
+        case .standard: SampleData.monthViewEvents
+        case .dense: SampleData.denseMonthViewEvents
+        case .colorful: ColorfulSampleData.events
+        }
+        let eventRepository = SyncableEventRepository(events: events)
         // 実機では、同期が終わると EventKit が変更通知を送る。サーバーの予定を取り込めたときだけ、同じ通知を送る。
         let sourceRefresher = FakeCalendarSourceRefresher {
             if eventRepository.pullRemote() { NotificationCenter.default.post(name: .calendarStoreDidChange, object: nil) }
@@ -130,6 +148,13 @@ final class Harness {
     // MARK: 表示
 
     /// パネルを隠す。アプリの `MenuBarController.close` と同じく `orderOut` を呼ぶ。
+    /// パネルの外観を切り替える。ライトとダークで、パレットの色の役割が切り替わることを確かめる。
+    func setAppearance(dark: Bool) {
+        let appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
+        panel.appearance = appearance
+        NSApplication.shared.appearance = appearance
+    }
+
     func hidePanel() {
         panel.orderOut(nil)
     }
