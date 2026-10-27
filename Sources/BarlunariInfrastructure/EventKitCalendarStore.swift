@@ -3,11 +3,11 @@ import Foundation
 import BarlunariApplication
 import BarlunariDomain
 
-/// `EKEventStore` を 1 つ持ち、カレンダー・予定・許可の 3 つのポートを実装する。
+/// `EKEventStore` を 1 つ持ち、カレンダー・予定・許可・同期の 4 つのポートを実装する。
 ///
 /// `EKEventStore` と `EKEvent` などは `Sendable` ではないため、actor に閉じ込める。
 /// 外へ返すのは、EventKit に依存しない値と、それを `EventKitMapper` で変換したドメインの型だけである。
-public actor EventKitCalendarStore: CalendarRepository, CalendarEventRepository, CalendarAccessAuthorizer {
+public actor EventKitCalendarStore: CalendarRepository, CalendarEventRepository, CalendarAccessAuthorizer, CalendarSourceRefresher {
     private let store = EKEventStore()
     private let mapper: EventKitMapper
     private let changeObserver: StoreChangeObserver
@@ -47,6 +47,14 @@ public actor EventKitCalendarStore: CalendarRepository, CalendarEventRepository,
         case .fullAccess: .fullAccess
         default: .denied
         }
+    }
+
+    // MARK: - CalendarSourceRefresher
+
+    /// 完全アクセスのときだけ、サーバーとの同期を OS に求める。許可がなければ何もせず、ダイアログも出さない。
+    public func refreshSources() async {
+        guard Self.currentStatus() == .fullAccess else { return }
+        store.refreshSourcesIfNecessary()
     }
 
     // MARK: - CalendarRepository

@@ -158,3 +158,15 @@ import Testing
         #expect(await GetLaunchAtLoginUseCase(service: service).execute())
     }
 }
+
+@Suite struct RefreshCalendarSourcesUseCaseTests {
+    @Test func 実行するとポートに同期を求める() async {
+        let refresher = FakeCalendarSourceRefresher()
+        let useCase = RefreshCalendarSourcesUseCase(refresher: refresher)
+
+        await useCase.execute()
+        await useCase.execute()
+
+        #expect(refresher.refreshCount == 2)
+    }
+}

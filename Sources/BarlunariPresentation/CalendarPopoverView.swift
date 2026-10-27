@@ -269,7 +269,7 @@ struct PopoverFooter: View {
                 .font(.caption2)
                 .foregroundStyle(.secondary)
             Spacer()
-            Button { viewModel.reload() } label: { Image(systemName: "arrow.clockwise") }
+            Button { viewModel.refresh() } label: { Image(systemName: "arrow.clockwise") }
                 .help("再読み込み")
                 .accessibilityLabel("再読み込み")
             Button { openSettings() } label: { Image(systemName: "gearshape") }

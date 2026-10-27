@@ -1,6 +1,7 @@
 import Foundation
 import BarlunariApplication
 import BarlunariDomain
+import Synchronization
 
 public struct FixedDateProvider: DateProvider {
     public let now: Date
@@ -95,4 +96,24 @@ public final class FakeSystemSettingsOpener: SystemSettingsOpener {
         openedDestinations.append(destination)
         return result
     }
+}
+
+/// 同期を求められた回数を数える `CalendarSourceRefresher`。
+///
+/// `onRefresh` を渡すと、同期を求められるたびに実行する。サーバーにだけある予定がローカルに届く動きの再現に使う。
+public final class FakeCalendarSourceRefresher: CalendarSourceRefresher {
+    private let count = Mutex(0)
+    private let onRefresh: (@Sendable () -> Void)?
+
+    public init(onRefresh: (@Sendable () -> Void)? = nil) {
+        self.onRefresh = onRefresh
+    }
+
+    public func refreshSources() async {
+        count.withLock { $0 += 1 }
+        onRefresh?()
+    }
+
+    /// 同期を求められた回数。
+    public var refreshCount: Int { count.withLock { $0 } }
 }

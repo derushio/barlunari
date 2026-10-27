@@ -72,6 +72,7 @@ struct Fixture {
             ),
             requestCalendarAccess: requestAccess,
             openSystemSettings: openSystemSettings,
+            refreshCalendarSources: RefreshCalendarSourcesUseCase(refresher: FakeCalendarSourceRefresher()),
             dateProvider: dateProvider,
             urlOpener: FakeURLOpener(),
             changeNotifier: notifier,
@@ -80,7 +81,8 @@ struct Fixture {
             listCalendars: ListCalendarsUseCase(
                 authorizer: authorizer, calendarRepository: calendarRepository, visibilityRepository: visibility
             ),
-            setCalendarVisibility: SetCalendarVisibilityUseCase(visibilityRepository: visibility)
+            setCalendarVisibility: SetCalendarVisibilityUseCase(visibilityRepository: visibility),
+            workspaceNotificationCenter: NotificationCenter()
         )
         settings = SettingsViewModel(
             getLaunchAtLogin: GetLaunchAtLoginUseCase(service: launchAtLogin),

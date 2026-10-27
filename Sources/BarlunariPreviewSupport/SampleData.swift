@@ -178,6 +178,18 @@ public enum SampleData {
         calendar.date(from: DateComponents(year: year, month: month, day: day, hour: hour, minute: minute))!
     }
 
+    /// 仕事のカレンダーの、`day` の `hour` 時から 1 時間の予定。タイトルが違えば別の予定になる。
+    public static func workEvent(_ title: String, on day: CalendarDay, hour: Int) -> CalendarEvent {
+        let start = date(day.year, day.month, day.day, hour, 0)
+        let id = "work-\(day)-\(hour)-\(title)"
+        return CalendarEvent(
+            accountID: workCalendar.accountID, id: try! EventID(id), calendarID: workCalendar.calendarID, title: title,
+            schedule: .timed(DateInterval(start: start, duration: 3600)),
+            attendance: .accepted,
+            iCalendarUID: "\(id)@example.com"
+        )
+    }
+
     private typealias DateTuple = (Int, Int, Int, Int, Int)
 
     private static func participant(

@@ -10,6 +10,15 @@ public protocol CalendarAccessAuthorizer: Sendable {
     func requestAccess() async throws -> CalendarAuthorizationStatus
 }
 
+/// カレンダーのサーバーとの同期を OS に求める。
+///
+/// 同期の完了は待たない。新しいデータは `Notification.Name.calendarStoreDidChange` で届く。
+/// 許可がないときは何もせず、許可のダイアログも出さない。
+public protocol CalendarSourceRefresher: Sendable {
+    /// サーバーとの同期を OS に求める。新しいデータは `calendarStoreDidChange` で届く。
+    func refreshSources() async
+}
+
 /// ログイン時にアプリを起動するかの設定。macOS の登録状態を正とし、アプリ側では保持しない。
 public protocol LaunchAtLoginService: Sendable {
     func isEnabled() async -> Bool

@@ -85,10 +85,19 @@ final class Driver {
                 default: throw DriverError.message("使い方: key escape|cmd+1|cmd+2")
                 }
                 label = "key-\(words[1].replacingOccurrences(of: "+", with: ""))"
+            case "remote-add":
+                let title = words.dropFirst().joined(separator: " ")
+                guard !title.isEmpty else { throw DriverError.message("使い方: remote-add <タイトル>") }
+                harness.addRemoteEvent(title: title)
+            case "store-change":
+                guard words.count == 2, let count = Int(words[1]), count > 0 else { throw DriverError.message("使い方: store-change <回数>") }
+                harness.postStoreChanges(count: count)
+            case "wake":
+                harness.postWake()
             case "hide":
                 harness.hidePanel()
             case "show":
-                harness.showPanel()
+                harness.reopenPanel()
             case "placement":
                 return (try placement(words, command: command), false)
             case "wait":

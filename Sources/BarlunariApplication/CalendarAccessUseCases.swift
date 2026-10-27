@@ -27,3 +27,17 @@ public struct OpenSystemSettingsUseCase: Sendable {
         opener.open(destination)
     }
 }
+
+/// カレンダーのサーバーとの同期を OS に求める。
+public struct RefreshCalendarSourcesUseCase: Sendable {
+    private let refresher: any CalendarSourceRefresher
+
+    public init(refresher: any CalendarSourceRefresher) {
+        self.refresher = refresher
+    }
+
+    /// サーバーとの同期を OS に求める。新しいデータは `calendarStoreDidChange` で届く。
+    public func execute() async {
+        await refresher.refreshSources()
+    }
+}

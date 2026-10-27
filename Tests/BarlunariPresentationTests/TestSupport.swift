@@ -89,6 +89,9 @@ struct Harness {
     let notifier: DataChangeNotifier
     /// 日付変更などの通知を、システムの通知と混ざらないよう専用の通知センターで流す。
     let notificationCenter = NotificationCenter()
+    /// スリープからの復帰の通知を流す専用の通知センター。
+    let workspaceNotificationCenter = NotificationCenter()
+    let sourceRefresher = FakeCalendarSourceRefresher()
     let calendarRepository: CountingCalendarRepository
     let eventRepository: ScriptedEventRepository
     let dateProvider: MutableDateProvider
@@ -135,6 +138,7 @@ struct Harness {
             ),
             requestCalendarAccess: requestAccess,
             openSystemSettings: openSystemSettings,
+            refreshCalendarSources: RefreshCalendarSourcesUseCase(refresher: sourceRefresher),
             dateProvider: dateProvider,
             urlOpener: opener,
             changeNotifier: notifier,
@@ -144,6 +148,7 @@ struct Harness {
                 authorizer: authorizer, calendarRepository: calendarRepository, visibilityRepository: visibility
             ),
             setCalendarVisibility: SetCalendarVisibilityUseCase(visibilityRepository: visibility),
+            workspaceNotificationCenter: workspaceNotificationCenter,
             notificationCenter: notificationCenter
         )
         settings = SettingsViewModel(

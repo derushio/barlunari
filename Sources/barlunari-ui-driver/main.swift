@@ -8,7 +8,7 @@ let usage = """
 使い方:
   barlunari-ui-driver serve <セッションのディレクトリ> [--dense]
   barlunari-ui-driver send <セッションのディレクトリ> "<コマンド>"
-コマンド: chain <コマンド> ; <コマンド> / click <x> <y> / hover <x> <y> / scroll <x> <y> <dy> [trackpad|wheel|fling|drag] / key escape|cmd+1|cmd+2 / placement <user|single> <x> <y> [compact] / wait <ms> / screenshot <名前> / quit
+コマンド: chain <コマンド> ; <コマンド> / click <x> <y> / hover <x> <y> / scroll <x> <y> <dy> [trackpad|wheel|fling|drag] / key escape|cmd+1|cmd+2 / remote-add <タイトル> / store-change <回数> / wake / hide / show / placement <user|single> <x> <y> [compact] / wait <ms> / screenshot <名前> / quit
 """
 
 func fail(_ message: String, code: Int32 = 1) -> Never {

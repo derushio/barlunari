@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import BarlunariApplication
 import BarlunariDomain
@@ -24,6 +25,11 @@ public final class CalendarPopoverViewModel {
 
     /// 前回の読み込みからこの秒数を過ぎていたら、ポップオーバーを開いたときに読み込み直す。
     static let staleInterval: TimeInterval = 60
+
+    /// パネルを開いていなくても、この間隔でサーバーとの同期を OS に求める。
+    static let syncInterval: Duration = .seconds(180)
+    /// `syncInterval` の 10% 以上。OS が起こす時刻をほかのタイマーとまとめられるようにする。
+    static let syncTolerance: Duration = .seconds(30)
 
     public private(set) var displayedMonth: CalendarMonth {
         didSet { untrackedDisplayedMonth = displayedMonth }
@@ -64,6 +70,8 @@ public final class CalendarPopoverViewModel {
     @ObservationIgnored let monthImageStore = MonthWeekImageStore()
     /// 解放時に通知の購読を解除する。
     @ObservationIgnored private var observations: [NotificationObservation] = []
+    /// パネルを開いていなくても同期を求め続ける。解放時に止まる。
+    @ObservationIgnored private var syncTimer: RepeatingTask?
 
     // MARK: 表示するカレンダーの一覧
 
@@ -88,6 +96,8 @@ public final class CalendarPopoverViewModel {
 
     /// 読み込みを始めてから終えるまで `true`。開いた直後の二重の呼び出しで、進行中の読み込みを取り消さないために使う。
     private var isLoadInFlight = false
+    /// 読み込み中に変更通知が届いたら立てる。読み込みが終わったとき、立っていれば 1 回だけ読み直す。
+    private var needsReloadAfterLoad = false
     /// ポップオーバー自身のウインドウ。設定ウインドウなど他のウインドウが key になっても反応しないために使う。
     @ObservationIgnored private var popoverWindowID: ObjectIdentifier?
     private var loadTask: Task<Void, Never>?
@@ -100,6 +110,7 @@ public final class CalendarPopoverViewModel {
     private let loadAgenda: LoadAgendaUseCase
     private let requestCalendarAccess: RequestCalendarAccessUseCase
     private let openSystemSettings: OpenSystemSettingsUseCase
+    private let refreshCalendarSources: RefreshCalendarSourcesUseCase
     private let dateProvider: any DateProvider
     private let urlOpener: any URLOpener
     private let changeNotifier: DataChangeNotifier
@@ -112,6 +123,7 @@ public final class CalendarPopoverViewModel {
         loadAgenda: LoadAgendaUseCase,
         requestCalendarAccess: RequestCalendarAccessUseCase,
         openSystemSettings: OpenSystemSettingsUseCase,
+        refreshCalendarSources: RefreshCalendarSourcesUseCase,
         dateProvider: any DateProvider,
         urlOpener: any URLOpener,
         changeNotifier: DataChangeNotifier,
@@ -119,11 +131,13 @@ public final class CalendarPopoverViewModel {
         saveDisplayMode: SaveDisplayModeUseCase,
         listCalendars: ListCalendarsUseCase,
         setCalendarVisibility: SetCalendarVisibilityUseCase,
+        workspaceNotificationCenter: NotificationCenter,
         notificationCenter: NotificationCenter = .default
     ) {
         self.loadAgenda = loadAgenda
         self.requestCalendarAccess = requestCalendarAccess
         self.openSystemSettings = openSystemSettings
+        self.refreshCalendarSources = refreshCalendarSources
         self.dateProvider = dateProvider
         self.urlOpener = urlOpener
         self.changeNotifier = changeNotifier
@@ -151,10 +165,18 @@ public final class CalendarPopoverViewModel {
             }
         }
         // カレンダーのデータが変わったら、今日や選択日はそのままに、予定だけを読み直す。
+        // 同期は求めない。同期、変更通知、同期の連鎖を起こさないためである。
         observations.append(NotificationObservation(center: notificationCenter, name: .calendarStoreDidChange) { [weak self] _ in
-            MainActor.assumeIsolated { self?.reload() }
+            MainActor.assumeIsolated { self?.reloadForStoreChange() }
+        })
+        // スリープから復帰したら、止まっていた同期を求め、読み直す。
+        observations.append(NotificationObservation(center: workspaceNotificationCenter, name: NSWorkspace.didWakeNotification) { [weak self] _ in
+            MainActor.assumeIsolated { self?.refresh() }
         })
         self.observations = observations
+        syncTimer = RepeatingTask(interval: Self.syncInterval, tolerance: Self.syncTolerance) { [weak self] in
+            self?.requestSourceSync()
+        }
     }
 
     /// 呼ぶたびに現在の暦で書式を選ぶ。マス目の日付と見出しの週の開始曜日を食い違わせないため。
@@ -518,9 +540,12 @@ public final class CalendarPopoverViewModel {
     /// ポップオーバーを開いたときに呼ぶ。古くなければ読み込み直さない。
     ///
     /// 前回の表示から日付が変わっていたら、選択日と表示月を今日に戻して必ず読み込む。
+    ///
+    /// 読み直さない場合でも、サーバーとの同期は求める。
     public func popoverDidAppear() {
         closeDetail()
         closeCalendarFilter()
+        requestSourceSync()
         if resetToTodayIfDayChanged() {
             reload()
             return
@@ -557,10 +582,35 @@ public final class CalendarPopoverViewModel {
         if isCalendarFilterOpen { refreshCalendarFilter() }
     }
 
+    /// サーバーとの同期を OS に求めてから、読み込み直す。更新ボタンと、スリープからの復帰で呼ぶ。
+    public func refresh() {
+        requestSourceSync()
+        reload()
+    }
+
+    /// サーバーとの同期を OS に求める。読み込みを待たせないよう、別の Task に投げる。新しいデータは変更通知で届く。
+    private func requestSourceSync() {
+        let refreshCalendarSources = refreshCalendarSources
+        Task { await refreshCalendarSources.execute() }
+    }
+
+    /// 変更通知を受けたときの読み直し。読み込み中は取り消さず、終わってから 1 回だけ読み直す。
+    ///
+    /// 取得は取り消せないため、通知のたびに取り消して始め直すと、通知の数だけ取得が直列に走る。
+    private func reloadForStoreChange() {
+        if isLoadInFlight {
+            needsReloadAfterLoad = true
+        } else {
+            reload()
+        }
+    }
+
     /// 予定だけを読み込み直す。表示するカレンダーの切り替えのように、一覧を自分で更新した変更で使う。
     private func startLoad() {
         loadTask?.cancel()
         loadGeneration += 1
+        // 新しい読み込みは、印を付けた通知より後に始まるため、その通知の分も含む。
+        needsReloadAfterLoad = false
         observedRevision = changeNotifier.revision
         isLoadInFlight = true
         let range = fetchRange
@@ -881,6 +931,7 @@ public final class CalendarPopoverViewModel {
         if generation == loadGeneration {
             isLoadInFlight = false
             loadingRange = nil
+            if needsReloadAfterLoad { reload() }
         }
     }
 

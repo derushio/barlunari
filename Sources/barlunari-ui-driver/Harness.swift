@@ -22,6 +22,11 @@ enum DriverError: Error, CustomStringConvertible {
 @MainActor
 final class Harness {
     let viewModel: CalendarPopoverViewModel
+    /// サーバーにだけある予定を持つ予定リポジトリ。同期を求められたときに、ローカルに取り込む。
+    private let eventRepository: SyncableEventRepository
+    private let sourceRefresher: FakeCalendarSourceRefresher
+    /// スリープからの復帰の通知を流す、注入したワークスペースの通知センター。
+    private let workspaceNotificationCenter = NotificationCenter()
     private let panel: MenuBarPanel
     private var hosting: NSView { panel.contentView ?? NSView() }
     /// 月表示の大きさを決める可視領域。実行する機械の画面に依らず、目標の大きさ 1862x1100（3 列）で出す。
@@ -47,7 +52,13 @@ final class Harness {
         let dateProvider = FixedDateProvider()
         let authorizer = FakeCalendarAccessAuthorizer(status: .fullAccess)
         let calendarRepository = InMemoryCalendarRepository(accounts: SampleData.accounts, calendars: SampleData.calendars)
-        let eventRepository = InMemoryCalendarEventRepository(events: dense ? SampleData.denseMonthViewEvents : SampleData.monthViewEvents, error: nil)
+        let eventRepository = SyncableEventRepository(events: dense ? SampleData.denseMonthViewEvents : SampleData.monthViewEvents)
+        // 実機では、同期が終わると EventKit が変更通知を送る。サーバーの予定を取り込めたときだけ、同じ通知を送る。
+        let sourceRefresher = FakeCalendarSourceRefresher {
+            if eventRepository.pullRemote() { NotificationCenter.default.post(name: .calendarStoreDidChange, object: nil) }
+        }
+        self.eventRepository = eventRepository
+        self.sourceRefresher = sourceRefresher
         let visibility = InMemoryCalendarVisibilityRepository()
         let displayModeStore = InMemoryDisplayModeStore()
         viewModel = CalendarPopoverViewModel(
@@ -60,6 +71,7 @@ final class Harness {
             ),
             requestCalendarAccess: RequestCalendarAccessUseCase(authorizer: authorizer),
             openSystemSettings: OpenSystemSettingsUseCase(opener: FakeSystemSettingsOpener()),
+            refreshCalendarSources: RefreshCalendarSourcesUseCase(refresher: sourceRefresher),
             dateProvider: dateProvider,
             urlOpener: FakeURLOpener(),
             changeNotifier: DataChangeNotifier(),
@@ -68,7 +80,8 @@ final class Harness {
             listCalendars: ListCalendarsUseCase(
                 authorizer: authorizer, calendarRepository: calendarRepository, visibilityRepository: visibility
             ),
-            setCalendarVisibility: SetCalendarVisibilityUseCase(visibilityRepository: visibility)
+            setCalendarVisibility: SetCalendarVisibilityUseCase(visibilityRepository: visibility),
+            workspaceNotificationCenter: workspaceNotificationCenter
         )
         let root = CalendarPopoverView(viewModel: viewModel, openSettings: {}, quit: {}, visibleFrame: Self.visibleFrame)
             .background(Color(nsColor: .windowBackgroundColor))
@@ -95,6 +108,23 @@ final class Harness {
         await settle()
     }
 
+    // MARK: 同期
+
+    /// サーバーにだけある予定を 1 件用意する。選択日の 14 時から 1 時間。次に同期を求められるまで、ローカルには届かない。
+    func addRemoteEvent(title: String) {
+        eventRepository.stageRemote(SampleData.workEvent(title, on: viewModel.selectedDay, hour: 14))
+    }
+
+    /// `.calendarStoreDidChange` を `count` 回続けて送る。
+    func postStoreChanges(count: Int) {
+        for _ in 0..<count { NotificationCenter.default.post(name: .calendarStoreDidChange, object: nil) }
+    }
+
+    /// スリープからの復帰の通知を、注入したワークスペースの通知センターに送る。
+    func postWake() {
+        workspaceNotificationCenter.post(name: NSWorkspace.didWakeNotification, object: nil)
+    }
+
     // MARK: 表示
 
     /// パネルを隠す。アプリの `MenuBarController.close` と同じく `orderOut` を呼ぶ。
@@ -106,6 +136,13 @@ final class Harness {
     /// このツールでは key にも前面にもしないよう、完全に透明な背面のまま `orderBack` で出す。
     func showPanel() {
         panel.orderBack(nil)
+    }
+
+    /// パネルを出し直し、開いたときの処理を行う。アプリでは、パネルが key になったことが `popoverDidAppear()` を呼ぶ。
+    /// このツールのパネルは key にならないので、ここで呼ぶ。
+    func reopenPanel() {
+        showPanel()
+        viewModel.popoverDidAppear()
     }
 
     /// 内容の大きさにパネルを合わせる。アプリでは次のランループに予約されるフレームの書き直しを、操作のたびに今すぐ行う。
@@ -187,7 +224,7 @@ final class Harness {
         let escape = lastEscape.map { " 直近のEsc=\($0)" } ?? ""
         let hiddenCount = viewModel.calendarFilterSections.flatMap(\.items).filter { !$0.isVisible }.count
         let filter = "\(viewModel.isCalendarFilterOpen ? "開" : "閉")(\(viewModel.calendarFilterPhase) 非表示=\(hiddenCount)件)"
-        return "モード=\(viewModel.displayMode.rawValue) カレンダー一覧=\(filter) 選択日=\(viewModel.selectedDay) 表示月=\(viewModel.displayedMonth) 状態=\(viewModel.phase) 詳細=\(detail) 一覧=\(viewModel.agendaDayCount)日 選択日の件数=\(rows)件(終日\(schedule.allDay.count) 時刻付き\(schedule.blocks.count))\(escape)"
+        return "モード=\(viewModel.displayMode.rawValue) カレンダー一覧=\(filter) 選択日=\(viewModel.selectedDay) 表示月=\(viewModel.displayedMonth) 状態=\(viewModel.phase) 詳細=\(detail) 一覧=\(viewModel.agendaDayCount)日 選択日の件数=\(rows)件(終日\(schedule.allDay.count) 時刻付き\(schedule.blocks.count))\(escape) 取得=\(eventRepository.fetchCount)回 同期要求=\(sourceRefresher.refreshCount)回"
     }
 
     // MARK: イベントの合成

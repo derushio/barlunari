@@ -33,6 +33,10 @@ EventKit との連携はすべて `BarlunariInfrastructure` に閉じ込めま�
 - `EKEventStoreChanged` を受けたら、`EventKitCalendarStore` が `NotificationCenter.default` に `Notification.Name.calendarStoreDidChange` を送ります。通知の名前は Application で定め、接頭辞は `AppIdentity.bundleIdentifier` と同じです
 - `CalendarPopoverViewModel` と `SettingsViewModel` が `calendarStoreDidChange` を購読し、予定とカレンダーを読み直します。ViewModel は EventKit を参照しません
 - 購読は解放時に解除します
+- 変更通知での読み直しは、進行中の取得を取り消しません。取得は actor の中の同期呼び出しで取り消せず、通知のたびに取り消して始め直すと、通知の数だけ取得が直列に走るためです。読み込み中に届いた通知は「終わったらもう 1 回読み直す」印だけを付け、読み込みが終わったとき、印があれば 1 回だけ読み直します。通知が何回続いても、取得は進行中の 1 回と後の 1 回に収まります。`reload()` など別の理由で新しい読み込みを始めたら、印は消します。遅延を足すデバウンスは入れません
+- サーバーとの同期は `CalendarSourceRefresher` で OS に求めます。`EventKitCalendarStore` は完全アクセスのときだけ `refreshSourcesIfNecessary()` を呼び、許可がなければ何もせず、許可のダイアログも出しません。同期の完了は待たず、新しいデータは変更通知で届きます
+- `CalendarPopoverViewModel` は、パネルを開いたとき、更新ボタンの `refresh()`、`NSWorkspace.didWakeNotification` によるスリープからの復帰で同期を求めます。パネルを開いたときは、前回の読み込みが新しく読み直さない場合も同期を求めます。復帰では同期を求めたうえで読み直します。パネルを開いていなくても、180 秒ごとに tolerance を付けて同期を求めます。同期は Task に投げ、読み込みを待たせません。「再試行」ボタンは `reload()` のままで、同期を求めません
+- 変更通知による読み直しでは同期を求めません。同期、変更通知、同期の連鎖を起こさないためです
 
 ## 変換規則
 

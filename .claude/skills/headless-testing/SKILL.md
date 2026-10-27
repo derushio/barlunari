@@ -35,7 +35,7 @@ description: Barlunari のテストを書く・実行するとき、フェイク
 
 ## フェイクの置き場所
 
-フェイク実装とサンプルデータは `BarlunariPreviewSupport` に置きます。テストターゲットごとに同じフェイクを重複して書かず、ここを共有します。フェイクは Domain と Application のプロトコルだけに依存します。`FakeCalendarAccessAuthorizer`、`FakeSystemSettingsOpener`、`FakeLaunchAtLoginService`、`FakeURLOpener`、`FixedDateProvider`、`InMemoryCalendarRepository`、`InMemoryCalendarEventRepository`、`InMemoryCalendarVisibilityRepository`、`InMemoryDisplayModeStore`、`SampleData` があります。テスト固有の挙動が要るフェイクは、各テストターゲットの `Fakes.swift` や `TestSupport.swift` に置いてかまいません。
+フェイク実装とサンプルデータは `BarlunariPreviewSupport` に置きます。テストターゲットごとに同じフェイクを重複して書かず、ここを共有します。フェイクは Domain と Application のプロトコルだけに依存します。`FakeCalendarAccessAuthorizer`、`FakeSystemSettingsOpener`、`FakeLaunchAtLoginService`、`FakeURLOpener`、`FixedDateProvider`、`InMemoryCalendarRepository`、`InMemoryCalendarEventRepository`、`SyncableEventRepository`、`FakeCalendarSourceRefresher`、`InMemoryCalendarVisibilityRepository`、`InMemoryDisplayModeStore`、`SampleData` があります。テスト固有の挙動が要るフェイクは、各テストターゲットの `Fakes.swift` や `TestSupport.swift` に置いてかまいません。
 
 ## EventKit の値によるテスト
 
@@ -69,7 +69,7 @@ description: Barlunari のテストを書く・実行するとき、フェイク
    .build/debug/barlunari-ui-driver send .playwright/ui "click 100 345"
    ```
 
-4. 結果の 1 行にある PNG を Read ツールで開き、意図した状態かを自分の目で判断する。1 行には、手順の番号、コマンド、PNG のパス、画素の寸法（`px`）、ポイントの寸法（`pt`）、倍率（`scale`）、操作の CPU 時間（`cpu`、`cpuSettle`）、ViewModel の状態（表示モード、選択日、表示月、状態、開いている詳細のタイトル、一覧の日数、選択日の件数と内訳）が入る。パネルのフレームは `panel=x,y,幅,高さ top=上端` で、表示モードの切り替えとコンパクト表示の詳細の開閉で、高さが内容に合わせて変わり、`top` が動かないことを確かめる。`カレンダー一覧=開(読み込みの状態 非表示=N件)` は、表示するカレンダーの一覧の開閉と、非表示のカレンダーの数である。`key escape` のあとの `直近のEsc=` は、閉じたもの（`closeDetail`、`closeCalendarFilter`）か、パネルを閉じる動作（`closePanel`）を示す。状態の要約だけで判断せず、必ず PNG を見る
+4. 結果の 1 行にある PNG を Read ツールで開き、意図した状態かを自分の目で判断する。1 行には、手順の番号、コマンド、PNG のパス、画素の寸法（`px`）、ポイントの寸法（`pt`）、倍率（`scale`）、操作の CPU 時間（`cpu`、`cpuSettle`）、ViewModel の状態（表示モード、選択日、表示月、状態、開いている詳細のタイトル、一覧の日数、選択日の件数と内訳）が入る。末尾の `取得=N回 同期要求=M回` は、予定を取得した回数と、サーバーとの同期を求めた回数である。`arrow.clockwise` の更新ボタンは `click` で押せる。1862x1100pt の月表示では、下端の左から 2 つ目の約 (1031, 1075) にある。パネルのフレームは `panel=x,y,幅,高さ top=上端` で、表示モードの切り替えとコンパクト表示の詳細の開閉で、高さが内容に合わせて変わり、`top` が動かないことを確かめる。`カレンダー一覧=開(読み込みの状態 非表示=N件)` は、表示するカレンダーの一覧の開閉と、非表示のカレンダーの数である。`key escape` のあとの `直近のEsc=` は、閉じたもの（`closeDetail`、`closeCalendarFilter`）か、パネルを閉じる動作（`closePanel`）を示す。状態の要約だけで判断せず、必ず PNG を見る
 5. 判断してから次の操作を送る。複数の操作を 1 回の Bash 呼び出しにまとめない。`cd`、`sleep`、シェル変数、`&&` と `;` による連結も使わない
 6. 終わったら `send .playwright/ui "quit"` で `serve` を止める。止まらなければプロセスを終了する
 
@@ -85,7 +85,10 @@ description: Barlunari のテストを書く・実行するとき、フェイク
 | `key escape|cmd+1|cmd+2` | Esc、⌘1、⌘2 の keyDown と keyUp を送る。⌘1 が月表示、⌘2 がコンパクト表示 |
 | `wait <ms>` | 待ってから撮る |
 | `chain <コマンド> ; <コマンド> ...` | 最後のコマンドの前の操作では、表示が落ち着くまで待たず、PNG も撮らずに次へ進む。操作の直後の操作（日を選んだ直後のスクロール、大きなスクロールの直後の「今日」）を再現するために使う。間を空けるときは `wait <ms>` を挟む。結果の 1 行と PNG は最後のコマンドのもの。通常の AIUI テストの 1 操作ずつの確認には使わず、タイミングに依存する不具合の再現にだけ使う |
-| `hide` / `show` | パネルを隠して出し直す。`hide` はアプリの `MenuBarController.close` と同じ `orderOut`、`show` は同じインスタンスを出し直す。アプリは `orderFrontRegardless` と `makeKey` で出すが、操作ツールは完全に透明・背面・key にしない設定を保つため `orderBack` で出す。ウインドウが隠れたときと出たときの処理（先に用意した画像を捨てる、出た直後の先の用意）を再現する。性能の計測では `chain hide ; wait 300 ; show ; wait 3500 ; scroll ... drag` のように使う |
+| `remote-add <タイトル>` | サーバーにだけある予定を、選択日の 14 時から 1 時間の予定として 1 件用意する。この時点ではローカルに届かず、パネルに出ない。`show` でパネルを出し直す、更新ボタンを押す、`wake` を送るなどで次に同期を求められたとき、ローカルへ入り、`.calendarStoreDidChange` が送られて読み直される |
+| `store-change <回数>` | `.calendarStoreDidChange` を指定した回数、続けて送る。読み直しは進行中の取得を取り消さず 1 回にまとまるので、`取得=` は増えても 1 か 2 である。同期は求めない |
+| `wake` | 注入したワークスペースの通知センターに `NSWorkspace.didWakeNotification` を送る。同期を求め、読み直す |
+| `hide` / `show` | パネルを隠して出し直す。`hide` はアプリの `MenuBarController.close` と同じ `orderOut`、`show` は同じインスタンスを出し直し、`popoverDidAppear()` を呼ぶ。アプリではパネルが key になったときに `popoverDidAppear()` が呼ばれる。アプリは `orderFrontRegardless` と `makeKey` で出すが、操作ツールは完全に透明・背面・key にしない設定を保つため `orderBack` で出す。ウインドウが隠れたときと出たときの処理（先に用意した画像を捨てる、出た直後の先の用意）を再現する。性能の計測では `chain hide ; wait 300 ; show ; wait 3500 ; scroll ... drag` のように使う |
 | `placement <user\|single> <x> <y> [compact]` | 仮想のディスプレイの配置（`user` は利用者の 3 枚、`single` は 1 枚。座標は画面座標で左下原点）とクリックの位置から、パネルのフレームを返す。ウインドウは作らず、何も出さない |
 | `screenshot <名前>` | 操作せずに撮る |
 | `quit` | `serve` を止める |
