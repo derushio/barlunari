@@ -46,7 +46,7 @@
 ## インストール
 
 ```sh
-git clone <このリポジトリの URL>
+git clone https://github.com/derushio/menudate
 cd menudate
 scripts/bundle.sh                  # MenuDate.app を組み立てます
 open -g -j <MenuDate.app のパス>    # 前面に出さずに起動します
@@ -55,7 +55,7 @@ open -g -j <MenuDate.app のパス>    # 前面に出さずに起動します
 Claude Code を使っている場合は、次のように頼むと、クローンから起動までを Claude Code が実行します。
 
 ```text
-<このリポジトリの URL> をクローンして、MenuDate.app を組み立てて起動して
+https://github.com/derushio/menudate をクローンして、MenuDate.app を組み立てて起動して
 ```
 
 `scripts/bundle.sh` が作る `MenuDate.app` は ad-hoc 署名です。ビルドし直すと macOS が別のアプリとして扱い、カレンダーへのアクセスの許可をもう一度求めることがあります。その場合は、下の手順でもう一度許可します。
