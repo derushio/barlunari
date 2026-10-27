@@ -65,6 +65,20 @@ struct CalendarFilterView: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
+            accountsFooter
+        }
+    }
+
+    /// 新しい予定が届かないときに、サインインし直す画面へ案内する。
+    private var accountsFooter: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Divider()
+            Text("新しい予定が届かないアカウントは、「インターネットアカウント」でサインインし直すと同期が再開します。")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            Button("「インターネットアカウント」を開く") { viewModel.openInternetAccounts() }
+                .controlSize(.small)
         }
     }
 }

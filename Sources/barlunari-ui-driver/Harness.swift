@@ -22,6 +22,8 @@ enum DriverError: Error, CustomStringConvertible {
 @MainActor
 final class Harness {
     let viewModel: CalendarPopoverViewModel
+    /// 開いたシステム設定の画面を記録する。結果の 1 行に出す。
+    private let settingsOpener = FakeSystemSettingsOpener()
     /// サーバーにだけある予定を持つ予定リポジトリ。同期を求められたときに、ローカルに取り込む。
     private let eventRepository: SyncableEventRepository
     private let sourceRefresher: FakeCalendarSourceRefresher
@@ -70,7 +72,7 @@ final class Harness {
                 dateProvider: dateProvider
             ),
             requestCalendarAccess: RequestCalendarAccessUseCase(authorizer: authorizer),
-            openSystemSettings: OpenSystemSettingsUseCase(opener: FakeSystemSettingsOpener()),
+            openSystemSettings: OpenSystemSettingsUseCase(opener: settingsOpener),
             refreshCalendarSources: RefreshCalendarSourcesUseCase(refresher: sourceRefresher),
             dateProvider: dateProvider,
             urlOpener: FakeURLOpener(),
@@ -222,9 +224,10 @@ final class Harness {
         let rows = schedule.allDay.count + schedule.blocks.count
         let detail = viewModel.eventDetail.map { "「\($0.title)」" } ?? "なし"
         let escape = lastEscape.map { " 直近のEsc=\($0)" } ?? ""
+        let settings = settingsOpener.openedDestinations.isEmpty ? "" : " システム設定=\(settingsOpener.openedDestinations)"
         let hiddenCount = viewModel.calendarFilterSections.flatMap(\.items).filter { !$0.isVisible }.count
         let filter = "\(viewModel.isCalendarFilterOpen ? "開" : "閉")(\(viewModel.calendarFilterPhase) 非表示=\(hiddenCount)件)"
-        return "モード=\(viewModel.displayMode.rawValue) カレンダー一覧=\(filter) 選択日=\(viewModel.selectedDay) 表示月=\(viewModel.displayedMonth) 状態=\(viewModel.phase) 詳細=\(detail) 一覧=\(viewModel.agendaDayCount)日 選択日の件数=\(rows)件(終日\(schedule.allDay.count) 時刻付き\(schedule.blocks.count))\(escape) 取得=\(eventRepository.fetchCount)回 同期要求=\(sourceRefresher.refreshCount)回"
+        return "モード=\(viewModel.displayMode.rawValue) カレンダー一覧=\(filter) 選択日=\(viewModel.selectedDay) 表示月=\(viewModel.displayedMonth) 状態=\(viewModel.phase) 詳細=\(detail) 一覧=\(viewModel.agendaDayCount)日 選択日の件数=\(rows)件(終日\(schedule.allDay.count) 時刻付き\(schedule.blocks.count))\(escape)\(settings) 取得=\(eventRepository.fetchCount)回 同期要求=\(sourceRefresher.refreshCount)回"
     }
 
     // MARK: イベントの合成

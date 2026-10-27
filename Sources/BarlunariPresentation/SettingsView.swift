@@ -112,10 +112,10 @@ private struct CalendarsSettingsTab: View {
         }
     }
 
-    /// アカウントの追加と削除は、システム設定で行うことの案内。
+    /// アカウントの追加と削除、サインインのし直しは、システム設定で行うことの案内。
     private var accountsFooter: some View {
         Section {
-            Text("アカウントの追加と削除は、システム設定の「インターネットアカウント」で行います。")
+            Text("アカウントの追加と削除は、システム設定の「インターネットアカウント」で行います。新しい予定が届かないアカウントは、そこでサインインし直すと同期が再開します。")
                 .font(.caption)
                 .foregroundStyle(.secondary)
             HStack {

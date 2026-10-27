@@ -175,4 +175,15 @@ import Testing
         #expect(after.count == requests.count + 1)
         #expect(after.last == requests.last)
     }
+
+    @Test func 一覧のボタンはインターネットアカウントを開く() async {
+        let harness = Harness()
+        let viewModel = await harness.loadedPopover()
+        viewModel.openCalendarFilter()
+        await viewModel.waitForCalendarFilter()
+
+        viewModel.openInternetAccounts()
+
+        #expect(harness.settingsOpener.openedDestinations == [.internetAccounts])
+    }
 }

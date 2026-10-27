@@ -639,6 +639,14 @@ public final class CalendarPopoverViewModel {
         }
     }
 
+    /// 表示するカレンダーの一覧から、システム設定の「インターネットアカウント」を開く。
+    ///
+    /// アカウントの認証が切れると macOS は同期をやめるが、EventKit はそれをアプリに知らせない。
+    /// 新しい予定が届かない利用者が、サインインし直す画面に辿り着けるようにする。
+    public func openInternetAccounts() {
+        openSystemSettings.execute(.internetAccounts)
+    }
+
     /// 許可を求め、結果に合わせて読み込み直す。求めている間は何もしない。
     private func requestAccess() async {
         guard !isRequestingAccess else { return }
