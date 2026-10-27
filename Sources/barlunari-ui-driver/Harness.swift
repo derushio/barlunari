@@ -305,17 +305,34 @@ final class Harness {
         deliver(try makeMouse(.mouseMoved, at: point, clickCount: 0, pressure: 0))
     }
 
+    /// 押した位置のビューか、その親に NSControl があるか。
+    private func hitsControl(at point: NSPoint) -> Bool {
+        var view = panel.contentView?.superview?.hitTest(point)
+        while let current = view {
+            if current is NSControl { return true }
+            view = current.superview
+        }
+        return false
+    }
+
+    /// 不変条件: SwiftUI のジェスチャー（onTapGesture）には、mouseDown と mouseUp をどちらもその場で `deliver` する。
+    /// mouseUp を先にアプリのキューへ積む経路は、1 回目の押下だけ SwiftUI に届き、2 回目以降は届かない。キューに積むのは NSControl の追跡ループがある押下だけにする。
     func click(x: Double, y: Double) throws {
         let point = try windowPoint(x, y)
         deliver(try makeMouse(.mouseMoved, at: point, clickCount: 0, pressure: 0))
+        let down = try makeMouse(.leftMouseDown, at: point, pressure: 1)
         let up = try makeMouse(.leftMouseUp, at: point, pressure: 0)
-        // AppKit のボタンは mouseDown の中で、mouseUp が届くまでイベントの追跡ループを回す。
-        // アプリ自身のイベントキューに mouseUp を積んでおくと、ループがそれを取り出して抜ける。システムのキューには流さない。
-        NSApplication.shared.postEvent(up, atStart: false)
-        deliver(try makeMouse(.leftMouseDown, at: point, pressure: 1))
-        // 追跡ループのないビュー（SwiftUI のボタンなど）では mouseUp が残るので、取り出して届ける。
-        while let rest = NSApplication.shared.nextEvent(matching: .leftMouseUp, until: .distantPast, inMode: .default, dequeue: true) {
-            deliver(rest)
+        if hitsControl(at: point) {
+            // AppKit のボタンは mouseDown の中で、mouseUp が届くまでイベントの追跡ループを回す。
+            // アプリ自身のイベントキューに mouseUp を積んでおくと、ループがそれを取り出して抜ける。システムのキューには流さない。
+            NSApplication.shared.postEvent(up, atStart: false)
+            deliver(down)
+            while let rest = NSApplication.shared.nextEvent(matching: .leftMouseUp, until: .distantPast, inMode: .default, dequeue: true) {
+                deliver(rest)
+            }
+        } else {
+            deliver(down)
+            deliver(up)
         }
     }
 
