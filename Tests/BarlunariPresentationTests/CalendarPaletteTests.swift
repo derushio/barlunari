@@ -82,6 +82,31 @@ import Testing
         }
     }
 
+    /// 過去の予定の文字は `pastTextOpacity` で薄くする。
+    @Test(arguments: cases) func 過去の予定の文字は薄くしても背景に対して四・五対一以上(_ c: Case) {
+        let opacity = CalendarPalette.pastTextOpacity
+        #expect(opacity < CalendarPalette.pastOpacity)
+        for window in c.backgrounds {
+            // 月表示の時刻付きの予定と予定一覧の行は、ウインドウの背景の上に直接描く。
+            let onWindow = Contrast.blend(c.text, over: window, opacity: opacity)
+            #expect(Contrast.ratio(onWindow, Contrast.rgb(window)) >= 4.5)
+            // 日の欄のブロックと終日の行は、薄くした薄い背景の上に、薄くした文字を重ねる。
+            for tint in [c.roles.tint, c.roles.selectedTint] {
+                let background = rgbHex(Contrast.blend(tint, over: window, opacity: opacity))
+                let text = Contrast.blend(c.text, over: background, opacity: opacity)
+                #expect(Contrast.ratio(text, Contrast.rgb(background)) >= 4.5, "\(c.testDescription) \(String(tint, radix: 16))")
+            }
+        }
+    }
+
+    /// 過去の予定の点（輪）と線は `pastOpacity` で薄くしても、ウインドウの背景に対して三対一以上。
+    @Test(arguments: cases) func 過去の予定の輪の点と線と帯の左端の線は薄くしても三対一以上(_ c: Case) {
+        for window in c.backgrounds {
+            let faded = Contrast.blend(c.roles.accent, over: window, opacity: CalendarPalette.pastOpacity)
+            #expect(Contrast.ratio(faded, Contrast.rgb(window)) >= 3)
+        }
+    }
+
     // MARK: 割り当て
 
     private func assigned(_ hex: String) throws -> String {
@@ -150,6 +175,10 @@ import Testing
 }
 
 /// WCAG 2.2 の相対輝度とコントラスト比。
+func rgbHex(_ color: Contrast.RGB) -> UInt32 {
+    UInt32(color.r.rounded()) << 16 | UInt32(color.g.rounded()) << 8 | UInt32(color.b.rounded())
+}
+
 enum Contrast {
     typealias RGB = (r: Double, g: Double, b: Double)
 

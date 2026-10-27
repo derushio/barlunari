@@ -317,6 +317,9 @@ enum MonthWeekPainter {
     private static let barHeight = MonthRowGeometry.laneHeight - 2
     private static let barRadius: CGFloat = 4
     private static let dotSize: CGFloat = 6
+    /// 過去の帯の左端の線の幅と、過去の点の輪の線の幅。
+    private static let pastBarEdgeWidth: CGFloat = 3
+    private static let pastDotLineWidth: CGFloat = 1.5
     private static let numberBadgeHeight: CGFloat = 20
     private static let gridLine = Color.primary.opacity(0.12)
 
@@ -409,13 +412,14 @@ enum MonthWeekPainter {
 
     /// 文字の色。解決した文字の記憶のキーにするため、`Color` でなくこの列挙で持つ。
     private enum TextColor: Hashable {
-        case white, ink, primary, secondary, red, blue
+        case white, ink, primary, pastPrimary, secondary, red, blue
 
         var value: Color {
             switch self {
             case .white: Color.white
             case .ink: Color(hex: 0x141414)
             case .primary: Color.primary
+            case .pastPrimary: Color.primary.opacity(CalendarPalette.pastTextOpacity)
             case .secondary: Color.secondary
             case .red: Color.red
             case .blue: Color.blue
@@ -484,7 +488,6 @@ enum MonthWeekPainter {
 
     private static func draw(_ item: MonthWeekLayout.Item, in context: inout GraphicsContext, geometry: MonthRowGeometry) {
         var context = context
-        if item.isPast { context.opacity = CalendarPalette.pastOpacity }
         let roles = item.color.paletteRoles(context.environment.colorScheme)
         let lane = geometry.laneRect(lane: item.lane, columns: item.columns)
         let row = CGRect(x: lane.minX, y: lane.minY + 1, width: lane.width, height: barHeight)
@@ -500,21 +503,46 @@ enum MonthWeekPainter {
                 bottomTrailingRadius: continuesToNext ? 0 : barRadius,
                 topTrailingRadius: continuesToNext ? 0 : barRadius
             )
-            context.fill(shape.path(in: bar), with: .color(roles.fillColor))
-            drawText(
-                item.title, style: .title, color: roles.onFill == 0xFFFFFF ? .white : .ink, in: &context,
-                from: bar.minX + 6, to: bar.maxX - 4, midY: bar.midY
-            )
+            if item.isPast {
+                // 過去の帯は塗らず、薄い背景と左端の線にして、標準の文字色で描く。未来の塗りの帯と形で区別する。
+                let barPath = shape.path(in: bar)
+                context.fill(barPath, with: .color(roles.tintColor))
+                if !continuesFromPrevious {
+                    let edge = CGRect(x: bar.minX, y: bar.minY, width: pastBarEdgeWidth, height: bar.height)
+                    let edgeShape = UnevenRoundedRectangle(
+                        topLeadingRadius: barRadius, bottomLeadingRadius: barRadius, bottomTrailingRadius: 0, topTrailingRadius: 0
+                    )
+                    context.fill(edgeShape.path(in: edge), with: .color(roles.accentColor.opacity(CalendarPalette.pastOpacity)))
+                }
+                drawText(
+                    item.title, style: .title, color: .primary, in: &context,
+                    from: bar.minX + 6, to: bar.maxX - 4, midY: bar.midY
+                )
+            } else {
+                context.fill(shape.path(in: bar), with: .color(roles.fillColor))
+                drawText(
+                    item.title, style: .title, color: roles.onFill == 0xFFFFFF ? .white : .ink, in: &context,
+                    from: bar.minX + 6, to: bar.maxX - 4, midY: bar.midY
+                )
+            }
         case .timed(let timeText):
             let dot = CGRect(x: row.minX + 4, y: row.midY - dotSize / 2, width: dotSize, height: dotSize)
-            context.fill(Path(ellipseIn: dot), with: .color(roles.accentColor))
+            if item.isPast {
+                // 過去の点は塗らない輪にして、未来の塗った点と形で区別する。
+                context.stroke(
+                    Path(ellipseIn: dot.insetBy(dx: pastDotLineWidth / 2, dy: pastDotLineWidth / 2)),
+                    with: .color(roles.accentColor.opacity(CalendarPalette.pastOpacity)), lineWidth: pastDotLineWidth
+                )
+            } else {
+                context.fill(Path(ellipseIn: dot), with: .color(roles.accentColor))
+            }
             let timeX = dot.maxX + 4
             let timeWidth = drawText(
                 timeText, style: .time, color: .secondary, in: &context,
                 from: timeX, to: row.maxX - 2, midY: row.midY
             )
             drawText(
-                item.title, style: .title, color: .primary, in: &context,
+                item.title, style: .title, color: item.isPast ? .pastPrimary : .primary, in: &context,
                 from: timeX + timeWidth + 4, to: row.maxX - 2, midY: row.midY
             )
         }

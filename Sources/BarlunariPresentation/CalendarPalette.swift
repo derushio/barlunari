@@ -52,8 +52,10 @@ public struct PaletteColor: Sendable, Equatable {
 /// 色相ごとに、ライトは塗りを白か黒に近い文字が 4.5:1 以上になる明度、点と線をウインドウの背景に 3:1 以上になる明度に置く。
 /// ダークは塗りと点を明るく置き、隣り合う色相は明度を交互にずらして区別しやすくした。
 public enum CalendarPalette {
-    /// 過去の予定を描くときの不透明度。点と線がこの値でもウインドウの背景に対して 3:1 以上を保つ。
+    /// 過去の予定の点と線を描くときの不透明度。点と線がこの値でもウインドウの背景に対して 3:1 以上を保つ。
     public static let pastOpacity: Double = 0.85
+    /// 過去の予定の文字と薄い背景を描くときの不透明度。標準の文字色がこの値でも背景に対して 4.5:1 以上を保つ。
+    public static let pastTextOpacity: Double = 0.7
 
     /// パレットの全色。有彩色、灰色の系統、茶色などの順に並ぶ。
     public static let all: [PaletteColor] = [

@@ -249,23 +249,28 @@ private struct AllDayItemRow: View {
         Button(action: action) {
             HStack(spacing: 6) {
                 Text(item.title).font(.callout).lineLimit(1)
+                    .opacity(item.isPast ? CalendarPalette.pastTextOpacity : 1)
                 Spacer(minLength: 0)
             }
             .padding(.horizontal, 8)
             .frame(height: 22)
-            .background(RoundedRectangle(cornerRadius: 4).fill(isSelected ? roles.selectedTintColor : roles.tintColor))
+            .background(
+                RoundedRectangle(cornerRadius: 4).fill(isSelected ? roles.selectedTintColor : roles.tintColor)
+                    .opacity(item.isPast ? CalendarPalette.pastTextOpacity : 1)
+            )
             .overlay {
                 if isSelected {
                     RoundedRectangle(cornerRadius: 4).strokeBorder(roles.accentColor, lineWidth: 2)
                 }
             }
             .overlay(alignment: .leading) {
-                RoundedRectangle(cornerRadius: 1.5).fill(roles.accentColor).frame(width: 3).padding(.vertical, 1)
+                RoundedRectangle(cornerRadius: 1.5).fill(roles.accentColor)
+                    .opacity(item.isPast ? CalendarPalette.pastOpacity : 1)
+                    .frame(width: 3).padding(.vertical, 1)
             }
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .opacity(item.isPast ? CalendarPalette.pastOpacity : 1)
         .accessibilityLabel(item.accessibilityLabel)
         .accessibilityHint("予定の詳細を開きます")
     }
@@ -352,11 +357,18 @@ private struct DayTimelineCanvas: View {
         let frame = frame(of: block)
         let roles = block.item.color.paletteRoles(context.environment.colorScheme)
         let shape = Path(roundedRect: frame, cornerRadius: 4)
+        let isPast = block.item.isPast
         context.drawLayer { layer in
-            if block.item.isPast { layer.opacity = CalendarPalette.pastOpacity }
             layer.clip(to: shape)
-            layer.fill(shape, with: .color(isSelected ? roles.selectedTintColor : roles.tintColor))
-            layer.fill(Path(CGRect(x: frame.minX, y: frame.minY, width: 3, height: frame.height)), with: .color(roles.accentColor))
+            // 過去のブロックは、薄い背景と文字を薄くし、点と線は少しだけ薄くする。
+            layer.drawLayer { background in
+                if isPast { background.opacity = CalendarPalette.pastTextOpacity }
+                background.fill(shape, with: .color(isSelected ? roles.selectedTintColor : roles.tintColor))
+            }
+            layer.drawLayer { edge in
+                if isPast { edge.opacity = CalendarPalette.pastOpacity }
+                edge.fill(Path(CGRect(x: frame.minX, y: frame.minY, width: 3, height: frame.height)), with: .color(roles.accentColor))
+            }
             // 詳細を出している予定は、予定の色の枠線（2pt）で強調する。ブロックの形で切るので、外側の半分は切れる。内側に 2pt 入れて描く。
             if isSelected { layer.stroke(Path(roundedRect: frame.insetBy(dx: 1, dy: 1), cornerRadius: 3), with: .color(roles.accentColor), lineWidth: 2) }
             let textRect = CGRect(x: frame.minX + 8, y: frame.minY + 1, width: max(0, frame.width - 13), height: max(0, frame.height - 2))
@@ -366,12 +378,14 @@ private struct DayTimelineCanvas: View {
                 let lineHeight = layer.resolve(Text(verbatim: "あ").font(.callout.weight(.semibold))).measure(in: textRect.size).height
                 let titleSize = title.measure(in: CGSize(width: textRect.width, height: min(textRect.height, lineHeight * 2)))
                 layer.drawLayer { titleLayer in
+                    if isPast { titleLayer.opacity = CalendarPalette.pastTextOpacity }
                     titleLayer.clip(to: Path(CGRect(origin: textRect.origin, size: CGSize(width: textRect.width, height: titleSize.height))))
                     titleLayer.draw(title, in: CGRect(origin: textRect.origin, size: CGSize(width: textRect.width, height: lineHeight * 2)))
                 }
                 layer.draw(layer.resolve(time), at: CGPoint(x: textRect.minX, y: textRect.minY + titleSize.height), anchor: .topLeading)
             } else {
-                let line = Text(verbatim: block.item.title).font(.caption.weight(.semibold)) + Text(verbatim: "  ") + time
+                let titleColor = Color.primary.opacity(isPast ? CalendarPalette.pastTextOpacity : 1)
+                let line = Text(verbatim: block.item.title).font(.caption.weight(.semibold)).foregroundStyle(titleColor) + Text(verbatim: "  ") + time
                 layer.draw(layer.resolve(line), at: textRect.origin, anchor: .topLeading)
             }
         }

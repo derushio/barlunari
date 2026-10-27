@@ -95,10 +95,12 @@ struct AgendaRowView: View {
                 HStack(alignment: .top, spacing: 8) {
                     RoundedRectangle(cornerRadius: 1.5)
                         .fill(state.color.paletteRoles(colorScheme).accentColor)
+                        .opacity(state.isPast ? CalendarPalette.pastOpacity : 1)
                         .frame(width: 3)
                     VStack(alignment: .leading, spacing: 1) {
                         Text(state.timeText).font(.caption2).foregroundStyle(.secondary).monospacedDigit()
                         Text(state.title).font(.callout).lineLimit(2)
+                            .opacity(state.isPast ? CalendarPalette.pastTextOpacity : 1)
                         if let location = state.location {
                             Label(location, systemImage: "mappin.and.ellipse")
                                 .font(.caption2)
@@ -127,7 +129,6 @@ struct AgendaRowView: View {
             }
         }
         .fixedSize(horizontal: false, vertical: true)
-        .opacity(state.isPast ? CalendarPalette.pastOpacity : 1)
     }
 }
 
