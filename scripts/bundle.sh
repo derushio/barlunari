@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
-# release ビルドの MenuDateApp から build/MenuDate.app を組み立て、ad-hoc 署名する。
+# release ビルドの BarlunariApp から build/Barlunari.app を組み立て、ad-hoc 署名する。
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-APP="$ROOT/build/MenuDate.app"
-VERSION="${MENUDATE_VERSION:-0.1.0}"
+APP="$ROOT/build/Barlunari.app"
+VERSION="${BARLUNARI_VERSION:-0.1.0}"
 
 cd "$ROOT"
-swift build -c release --product MenuDateApp
+swift build -c release --product BarlunariApp
 BIN_DIR="$(swift build -c release --show-bin-path)"
 
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-cp "$BIN_DIR/MenuDateApp" "$APP/Contents/MacOS/MenuDate"
+cp "$BIN_DIR/BarlunariApp" "$APP/Contents/MacOS/Barlunari"
 
 # LSUIElement を true にして、Dock とアプリ切り替えに出さない。
 cat > "$APP/Contents/Info.plist" <<PLIST
@@ -21,13 +21,13 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 <plist version="1.0">
 <dict>
     <key>CFBundleIdentifier</key>
-    <string>io.github.derushio.MenuDate</string>
+    <string>io.github.derushio.Barlunari</string>
     <key>CFBundleName</key>
-    <string>MenuDate</string>
+    <string>Barlunari</string>
     <key>CFBundleDisplayName</key>
-    <string>MenuDate</string>
+    <string>Barlunari</string>
     <key>CFBundleExecutable</key>
-    <string>MenuDate</string>
+    <string>Barlunari</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>

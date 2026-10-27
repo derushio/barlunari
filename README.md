@@ -1,4 +1,4 @@
-# MenuDate
+# Barlunari
 
 メニューバーから、Google カレンダーなどの予定をすぐに確認できる macOS アプリです。予定は Mac のカレンダーから同期されます。macOS の「インターネットアカウント」に追加したアカウントのカレンダーを、Mac の「カレンダー」アプリと同じデータから EventKit で読み込み、まとめて表示します。アプリ自体にサインインはなく、認証情報も持ちません。
 
@@ -46,23 +46,23 @@
 ## インストール
 
 ```sh
-git clone https://github.com/derushio/menudate
-cd menudate
-scripts/bundle.sh                  # MenuDate.app を組み立てます
-open -g -j <MenuDate.app のパス>    # 前面に出さずに起動します
+git clone https://github.com/derushio/barlunari
+cd barlunari
+scripts/bundle.sh                  # Barlunari.app を組み立てます
+open -g -j <Barlunari.app のパス>    # 前面に出さずに起動します
 ```
 
 Claude Code を使っている場合は、次のように頼むと、クローンから起動までを Claude Code が実行します。
 
 ```text
-https://github.com/derushio/menudate をクローンして、MenuDate.app を組み立てて起動して
+https://github.com/derushio/barlunari をクローンして、Barlunari.app を組み立てて起動して
 ```
 
-`scripts/bundle.sh` が作る `MenuDate.app` は ad-hoc 署名です。ビルドし直すと macOS が別のアプリとして扱い、カレンダーへのアクセスの許可をもう一度求めることがあります。その場合は、下の手順でもう一度許可します。
+`scripts/bundle.sh` が作る `Barlunari.app` は ad-hoc 署名です。ビルドし直すと macOS が別のアプリとして扱い、カレンダーへのアクセスの許可をもう一度求めることがあります。その場合は、下の手順でもう一度許可します。
 
 ## 予定を表示する準備
 
-MenuDate は macOS が同期したカレンダーを読むので、Google 側の設定は要りません。
+Barlunari は macOS が同期したカレンダーを読むので、Google 側の設定は要りません。
 
 ### アカウントを追加する
 
@@ -70,7 +70,7 @@ MenuDate は macOS が同期したカレンダーを読むので、Google 側の
 2. 「アカウントを追加」を押し、「Google」を選んで、画面の案内に従ってサインインします。複数のアカウントを追加できます
 3. 追加したアカウントの「カレンダー」をオンにします
 
-iCloud やその他の CalDAV のアカウントも、同じ手順で追加すると表示されます。アカウントの追加と削除は、MenuDate ではなく「インターネットアカウント」で行います。MenuDate の設定画面にも「「インターネットアカウント」を開く」ボタンがあります。
+iCloud やその他の CalDAV のアカウントも、同じ手順で追加すると表示されます。アカウントの追加と削除は、Barlunari ではなく「インターネットアカウント」で行います。Barlunari の設定画面にも「「インターネットアカウント」を開く」ボタンがあります。
 
 ### カレンダーへのアクセスを許可する
 
@@ -78,7 +78,7 @@ iCloud やその他の CalDAV のアカウントも、同じ手順で追加す�
 2. 「カレンダーへのアクセスを許可」を押します
 3. macOS のダイアログで、フルアクセスを許可します
 
-許可を求めるのは、このボタンを押したときだけです。起動時には求めません。許可を拒否したときは、パネルに「システム設定を開く」が出ます。「プライバシーとセキュリティ」の「カレンダー」で、MenuDate にフルアクセスを許可します。
+許可を求めるのは、このボタンを押したときだけです。起動時には求めません。許可を拒否したときは、パネルに「システム設定を開く」が出ます。「プライバシーとセキュリティ」の「カレンダー」で、Barlunari にフルアクセスを許可します。
 
 ## 使い方
 
@@ -103,7 +103,7 @@ iCloud やその他の CalDAV のアカウントも、同じ手順で追加す�
 ```sh
 swift build                                        # ビルド
 swift test                                         # テスト。ヘッドレスで実行されます
-swift run menudate-snapshots .playwright/snapshots # 画面の見た目を PNG に出力します
+swift run barlunari-snapshots .playwright/snapshots # 画面の見た目を PNG に出力します
 ```
 
 テストとスナップショットは、画面にウインドウを表示せず、フォーカスも奪いません。設計は戦術的 DDD のレイヤードアーキテクチャで、外部ライブラリは使いません。開発の規則は [CLAUDE.md](CLAUDE.md) にあります。

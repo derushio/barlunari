@@ -8,95 +8,95 @@ let swiftSettings: [SwiftSetting] = [
 ]
 
 let package = Package(
-    name: "MenuDate",
+    name: "Barlunari",
     platforms: [.macOS(.v15)],
     products: [
-        .executable(name: "MenuDateApp", targets: ["MenuDateApp"]),
-        .executable(name: "menudate-snapshots", targets: ["menudate-snapshots"]),
-        .executable(name: "menudate-ui-driver", targets: ["menudate-ui-driver"]),
+        .executable(name: "BarlunariApp", targets: ["BarlunariApp"]),
+        .executable(name: "barlunari-snapshots", targets: ["barlunari-snapshots"]),
+        .executable(name: "barlunari-ui-driver", targets: ["barlunari-ui-driver"]),
     ],
     targets: [
-        .target(name: "MenuDateDomain", swiftSettings: swiftSettings),
+        .target(name: "BarlunariDomain", swiftSettings: swiftSettings),
         .target(
-            name: "MenuDateApplication",
-            dependencies: ["MenuDateDomain"],
+            name: "BarlunariApplication",
+            dependencies: ["BarlunariDomain"],
             swiftSettings: swiftSettings
         ),
         .target(
-            name: "MenuDateInfrastructure",
-            dependencies: ["MenuDateDomain", "MenuDateApplication"],
+            name: "BarlunariInfrastructure",
+            dependencies: ["BarlunariDomain", "BarlunariApplication"],
             swiftSettings: swiftSettings
         ),
         .target(
-            name: "MenuDatePresentation",
-            dependencies: ["MenuDateDomain", "MenuDateApplication"],
+            name: "BarlunariPresentation",
+            dependencies: ["BarlunariDomain", "BarlunariApplication"],
             swiftSettings: swiftSettings
         ),
         .target(
-            name: "MenuDatePreviewSupport",
-            dependencies: ["MenuDateDomain", "MenuDateApplication"],
+            name: "BarlunariPreviewSupport",
+            dependencies: ["BarlunariDomain", "BarlunariApplication"],
             swiftSettings: swiftSettings
         ),
         .executableTarget(
-            name: "MenuDateApp",
+            name: "BarlunariApp",
             dependencies: [
-                "MenuDateDomain",
-                "MenuDateApplication",
-                "MenuDateInfrastructure",
-                "MenuDatePresentation",
+                "BarlunariDomain",
+                "BarlunariApplication",
+                "BarlunariInfrastructure",
+                "BarlunariPresentation",
             ],
             swiftSettings: swiftSettings
         ),
         .executableTarget(
-            name: "menudate-snapshots",
+            name: "barlunari-snapshots",
             dependencies: [
-                "MenuDateDomain",
-                "MenuDateApplication",
-                "MenuDatePresentation",
-                "MenuDatePreviewSupport",
+                "BarlunariDomain",
+                "BarlunariApplication",
+                "BarlunariPresentation",
+                "BarlunariPreviewSupport",
             ],
-            path: "Sources/menudate-snapshots",
+            path: "Sources/barlunari-snapshots",
             swiftSettings: swiftSettings
         ),
         .executableTarget(
-            name: "menudate-ui-driver",
+            name: "barlunari-ui-driver",
             dependencies: [
-                "MenuDateDomain",
-                "MenuDateApplication",
-                "MenuDatePresentation",
-                "MenuDatePreviewSupport",
+                "BarlunariDomain",
+                "BarlunariApplication",
+                "BarlunariPresentation",
+                "BarlunariPreviewSupport",
             ],
-            path: "Sources/menudate-ui-driver",
+            path: "Sources/barlunari-ui-driver",
             swiftSettings: swiftSettings
         ),
 
         .testTarget(
-            name: "MenuDateDomainTests",
-            dependencies: ["MenuDateDomain"],
+            name: "BarlunariDomainTests",
+            dependencies: ["BarlunariDomain"],
             swiftSettings: swiftSettings
         ),
         .testTarget(
-            name: "MenuDateApplicationTests",
-            dependencies: ["MenuDateDomain", "MenuDateApplication", "MenuDatePreviewSupport"],
+            name: "BarlunariApplicationTests",
+            dependencies: ["BarlunariDomain", "BarlunariApplication", "BarlunariPreviewSupport"],
             swiftSettings: swiftSettings
         ),
         .testTarget(
-            name: "MenuDateInfrastructureTests",
+            name: "BarlunariInfrastructureTests",
             dependencies: [
-                "MenuDateDomain",
-                "MenuDateApplication",
-                "MenuDateInfrastructure",
-                "MenuDatePreviewSupport",
+                "BarlunariDomain",
+                "BarlunariApplication",
+                "BarlunariInfrastructure",
+                "BarlunariPreviewSupport",
             ],
             swiftSettings: swiftSettings
         ),
         .testTarget(
-            name: "MenuDatePresentationTests",
+            name: "BarlunariPresentationTests",
             dependencies: [
-                "MenuDateDomain",
-                "MenuDateApplication",
-                "MenuDatePresentation",
-                "MenuDatePreviewSupport",
+                "BarlunariDomain",
+                "BarlunariApplication",
+                "BarlunariPresentation",
+                "BarlunariPreviewSupport",
             ],
             swiftSettings: swiftSettings
         ),

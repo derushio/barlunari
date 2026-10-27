@@ -1,6 +1,6 @@
 ---
 name: headless-testing
-description: MenuDate のテストを書く・実行するとき、フェイクやスタブを用意するとき、スナップショットの PNG で見た目を確かめるとき、アプリの起動確認をするときに使います。カーソルやフォーカスを奪わないヘッドレスのテスト方針を定めます。
+description: Barlunari のテストを書く・実行するとき、フェイクやスタブを用意するとき、スナップショットの PNG で見た目を確かめるとき、アプリの起動確認をするときに使います。カーソルやフォーカスを奪わないヘッドレスのテスト方針を定めます。
 ---
 
 # headless-testing
@@ -11,7 +11,7 @@ description: MenuDate のテストを書く・実行するとき、フェイク�
 
 - 画面に表示するウィンドウを開くテストを書かない。スナップショットのオフスクリーンの `NSWindow` と、操作ツールの完全に透明で背面の `NSWindow` は、利用者の目にも操作にも触れないので例外とする
 - AppleScript、`cliclick`、`osascript` などでカーソルやフォーカスを操作しない
-- `open` を `-g -j` なしで使って、アプリを前面に出さない。起動確認は `open -g -j <MenuDate.app のパス>` で行う
+- `open` を `-g -j` なしで使って、アプリを前面に出さない。起動確認は `open -g -j <Barlunari.app のパス>` で行う
 - 画面を操作する UI テストを書かない
 
 ## Swift Testing の書き方
@@ -28,19 +28,19 @@ description: MenuDate のテストを書く・実行するとき、フェイク�
 | レイヤー | 何でテストするか |
 | --- | --- |
 | Domain | 依存なしの単体テスト。不正な値で `DomainError` が投げられること、`AgendaBuilder` の並び順と除外条件を確かめる |
-| Application | `MenuDatePreviewSupport` のフェイクのリポジトリとポートでユースケースをテストする |
+| Application | `BarlunariPreviewSupport` のフェイクのリポジトリとポートでユースケースをテストする |
 | Infrastructure | `EventKitMapper` を `EventKitEventValue` などの値で確かめる。`EKEventStore` に触れるテストは書かない。許可のダイアログが出て、フォーカスを奪うためである。UserDefaults の代わりにテスト専用の suite を使い、実物に触れない形にする |
 | Presentation | 位置の計算（`PopoverPlacement`）と閉じ方の判断（`PopoverEscapeAction`、`PopoverToggleGate`）は純粋な値のテストで確かめる。`MenuBarPanel` は画面に出さず（`orderFront`、`makeKey` を呼ばず）、内容の大きさを変えて、フレームの書き直しと上端が動かないことを確かめる。`NSStatusItem` は作らない。PreviewSupport のフェイクで ViewModel を組み立てて `Harness` でテストする。URL を開く処理は `FakeURLOpener` に差し替える。日付の変更などの通知は、専用の `NotificationCenter` で流す。複数のアカウントは `SampleData.accounts` の 2 アカウントで確かめ、許可の状態は `Harness` の `status` と `statusAfterRequest`、カレンダーがない状態は `accounts` と `calendars` に空を渡して再現する。ウインドウは開かず、ViewModel の状態を検証する |
-| 見た目 | `menudate-snapshots` で PNG にして目で確かめる |
+| 見た目 | `barlunari-snapshots` で PNG にして目で確かめる |
 
 ## フェイクの置き場所
 
-フェイク実装とサンプルデータは `MenuDatePreviewSupport` に置きます。テストターゲットごとに同じフェイクを重複して書かず、ここを共有します。フェイクは Domain と Application のプロトコルだけに依存します。`FakeCalendarAccessAuthorizer`、`FakeSystemSettingsOpener`、`FakeLaunchAtLoginService`、`FakeURLOpener`、`FixedDateProvider`、`InMemoryCalendarRepository`、`InMemoryCalendarEventRepository`、`InMemoryCalendarVisibilityRepository`、`InMemoryDisplayModeStore`、`SampleData` があります。テスト固有の挙動が要るフェイクは、各テストターゲットの `Fakes.swift` や `TestSupport.swift` に置いてかまいません。
+フェイク実装とサンプルデータは `BarlunariPreviewSupport` に置きます。テストターゲットごとに同じフェイクを重複して書かず、ここを共有します。フェイクは Domain と Application のプロトコルだけに依存します。`FakeCalendarAccessAuthorizer`、`FakeSystemSettingsOpener`、`FakeLaunchAtLoginService`、`FakeURLOpener`、`FixedDateProvider`、`InMemoryCalendarRepository`、`InMemoryCalendarEventRepository`、`InMemoryCalendarVisibilityRepository`、`InMemoryDisplayModeStore`、`SampleData` があります。テスト固有の挙動が要るフェイクは、各テストターゲットの `Fakes.swift` や `TestSupport.swift` に置いてかまいません。
 
 ## EventKit の値によるテスト
 
 - EventKit の型は `Sendable` ではなく、実物の `EKEventStore` は許可のダイアログを出すため、テストでは使わない。`EventKitCalendarStore` はテストしない
-- `EventKitMapper` は、`EventKitValues.swift` の値（`EventKitSourceValue`、`EventKitCalendarValue`、`EventKitEventValue`）を作って確かめる。`@testable import MenuDateInfrastructure` で内部の型を使う。暦は `FixedDateProvider` で固定する
+- `EventKitMapper` は、`EventKitValues.swift` の値（`EventKitSourceValue`、`EventKitCalendarValue`、`EventKitEventValue`）を作って確かめる。`@testable import BarlunariInfrastructure` で内部の型を使う。暦は `FixedDateProvider` で固定する
 - 分岐ごとにテストを書く。終日予定の終了日、複数日の終日予定、終了が開始より前の予定、出欠の対応表、会議の URL を探す順、会議サービスでない URL を飛ばす場合、メモの URL の末尾の句読点がある
 - 許可の状態は `FakeCalendarAccessAuthorizer` で再現する。`status` に `.notDetermined`、`.denied`、`.fullAccess` を渡し、`requestError` で許可を求める操作の失敗を再現する。システム設定を開く操作は `FakeSystemSettingsOpener` が記録する
 - 予定の詳細は、ViewModel のテストで、詳細の開閉、一覧に戻る条件、読み直しでの扱い、URL を開く処理を確かめる。読み直しは `ScriptedEventRepository` の `gate()` と `resume(at:events:)` で、返す予定を差し替えて再現する。URL を開く処理は `FakeURLOpener` が記録する。`SampleData` の「デザインレビュー」は、詳細の全項目を持つ
@@ -48,25 +48,25 @@ description: MenuDate のテストを書く・実行するとき、フェイク�
 
 ## スナップショットで見た目を確かめる手順
 
-1. `swift run menudate-snapshots .playwright/snapshots` を実行する。画面に出さないオフスクリーンの `NSWindow` に `NSHostingView` を入れ、`cacheDisplay` で PNG にする。`NSApplication.shared.setActivationPolicy(.prohibited)` を呼ぶので、前面にもキーにもならず、利用者のフォーカスを奪わない。`makeKeyAndOrderFront` と `activate` は呼ばない
+1. `swift run barlunari-snapshots .playwright/snapshots` を実行する。画面に出さないオフスクリーンの `NSWindow` に `NSHostingView` を入れ、`cacheDisplay` で PNG にする。`NSApplication.shared.setActivationPolicy(.prohibited)` を呼ぶので、前面にもキーにもならず、利用者のフォーカスを奪わない。`makeKeyAndOrderFront` と `activate` は呼ばない
 2. 複数のアカウントの見た目は、アカウントごとのセクションのカレンダータブの PNG で確かめる。許可が未決定、拒否、カレンダーなしの案内は、ポップオーバーと設定のカレンダータブの PNG で確かめる。予定の詳細は `popover-detail-light`、`popover-detail-dark`、`popover-detail-minimal` で確かめる。表示するカレンダーの一覧は `month-calendars-light`、`month-calendars-dark`、`popover-calendars-light`、`popover-calendars-dark` で確かめる。狭い画面の 2 列は `month-two-column-light`、`month-two-column-detail-light`、`month-two-column-calendars-light` で確かめる。3 列の月表示は、詳細の列の空の状態を `month-light`、詳細を `month-detail-*`、一覧を `month-calendars-*` で確かめ、ほかに `month-light`、`month-dark`、`month-detail-light`、`month-detail-dark`、`month-day-today`（今日の線）、`month-day-events`、`month-day-events-detail`（日の欄の詳細）、`month-day-overlap-light`、`month-day-overlap-dark`（重なる予定と終日の予定）、`month-day-events-empty`、`month-day-dense`、`month-next-month`、`month-not-determined`、`month-denied`、`month-error`、`month-loading` で確かめる。詳細の内容がスクロールで切れる長さのときは、`EventDetailView.maxHeight` を一時的に大きくして全項目を描き、確かめた後に戻す
 3. 出力された PNG を Read ツールで開き、意図した見た目かを自分の目で確かめる。寸法の数値だけで完了にしない
 4. 崩れや欠けがあれば View を直し、1 から繰り返す
-5. 新しい画面や状態を足したときは、`menudate-snapshots` にも追加する。ViewModel は `Fixture` が PreviewSupport のフェイクで組み立てる
+5. 新しい画面や状態を足したときは、`barlunari-snapshots` にも追加する。ViewModel は `Fixture` が PreviewSupport のフェイクで組み立てる
 
-## AIUI テスト（menudate-ui-driver）
+## AIUI テスト（barlunari-ui-driver）
 
-ポップオーバーを AI が 1 操作ずつ動かし、操作のたびに PNG を見て判断する。`menudate-ui-driver` が、本物の `CalendarPopoverView` と `CalendarPopoverViewModel` を `MenuDatePreviewSupport` のフェイクと固定の現在日時で組み立て、アプリと同じ `MenuBarPanel`（同じ `NSHostingView` の設定と同じフレームの決め方）に載せ、ディスプレイの範囲内に完全に透明にして置く。合成した `NSEvent` をアプリのイベントキューへ直接渡すので、利用者のカーソルとフォーカスは奪わない。`CGEvent.post`、AppleScript、`cliclick` は使わない。
+ポップオーバーを AI が 1 操作ずつ動かし、操作のたびに PNG を見て判断する。`barlunari-ui-driver` が、本物の `CalendarPopoverView` と `CalendarPopoverViewModel` を `BarlunariPreviewSupport` のフェイクと固定の現在日時で組み立て、アプリと同じ `MenuBarPanel`（同じ `NSHostingView` の設定と同じフレームの決め方）に載せ、ディスプレイの範囲内に完全に透明にして置く。合成した `NSEvent` をアプリのイベントキューへ直接渡すので、利用者のカーソルとフォーカスは奪わない。`CGEvent.post`、AppleScript、`cliclick` は使わない。
 
 ### 手順
 
-1. `swift build --product menudate-ui-driver` でビルドする
-2. Bash ツールの `run_in_background: true` で、`serve` を 1 回だけ起動する。コマンドは `<worktree の絶対パス>/.build/debug/menudate-ui-driver serve <worktree の絶対パス>/.playwright/ui` のように、絶対パスで書く。起動時に、そのディレクトリの古い PNG、ログ、パイプを削除する。`rm` は使わない
+1. `swift build --product barlunari-ui-driver` でビルドする
+2. Bash ツールの `run_in_background: true` で、`serve` を 1 回だけ起動する。コマンドは `<worktree の絶対パス>/.build/debug/barlunari-ui-driver serve <worktree の絶対パス>/.playwright/ui` のように、絶対パスで書く。起動時に、そのディレクトリの古い PNG、ログ、パイプを削除する。`rm` は使わない
    予定の多いデータで測るときは、末尾に `--dense` を付ける（`serve <ディレクトリ> --dense`）。選べる全日に時刻付きの予定が 3〜8 件、週ごとに終日や複数日の予定が 2〜3 件、長いタイトルもある。`SampleData.denseMonthViewEvents` を使う。付けなければ `SampleData.monthViewEvents` である
 3. 1 回の Bash 呼び出しで 1 操作だけ、前面で `send` を実行する。`send` は `serve` の準備ができるまで待ち、操作の結果が出たら 1 行を返す
 
    ```sh
-   .build/debug/menudate-ui-driver send .playwright/ui "click 100 345"
+   .build/debug/barlunari-ui-driver send .playwright/ui "click 100 345"
    ```
 
 4. 結果の 1 行にある PNG を Read ツールで開き、意図した状態かを自分の目で判断する。1 行には、手順の番号、コマンド、PNG のパス、画素の寸法（`px`）、ポイントの寸法（`pt`）、倍率（`scale`）、操作の CPU 時間（`cpu`、`cpuSettle`）、ViewModel の状態（表示モード、選択日、表示月、状態、開いている詳細のタイトル、一覧の日数、選択日の件数と内訳）が入る。パネルのフレームは `panel=x,y,幅,高さ top=上端` で、表示モードの切り替えとコンパクト表示の詳細の開閉で、高さが内容に合わせて変わり、`top` が動かないことを確かめる。`カレンダー一覧=開(読み込みの状態 非表示=N件)` は、表示するカレンダーの一覧の開閉と、非表示のカレンダーの数である。`key escape` のあとの `直近のEsc=` は、閉じたもの（`closeDetail`、`closeCalendarFilter`）か、パネルを閉じる動作（`closePanel`）を示す。状態の要約だけで判断せず、必ず PNG を見る
@@ -105,7 +105,7 @@ description: MenuDate のテストを書く・実行するとき、フェイク�
 - スクロールは `CGEvent` の scroll wheel（`scrollWheelEvent2`）に phase、momentum phase、連続かどうかを設定して `NSEvent(cgEvent:)` に変換する。`CGEvent` は post しない。スクロールの `CGEvent` はウィンドウ番号を保持せず `window` が nil になるため、`window` と位置だけを差し替えた `NSEvent` のサブクラスを `NSApp.sendEvent` に渡す。ローカルモニターとウィンドウの両方に届く
 - キーは `windowNumber` のパネルへ `NSApp.sendEvent` が渡す（パネルは key にしない）。`window.sendEvent` を重ねて呼ぶと Esc が 2 回届く
 - 操作ツールの処理はメインアクターの 1 つのジョブの中で動く。ランループを回すだけでは、アプリのメインアクターの Task（予定の読み込み、`Task.sleep` のあとの処理）が操作の終わりまで動かず、実際のアプリと違う順に処理が進む。待つ間は、ランループを 1ms ずつ回しては `Task.yield()` で順番を譲る
-- 設定のウインドウ、メニューバーの項目、パネルの開閉と閉じ方（外のクリック、他のアプリの前面化、アイコンの再押下）は対象外である。実機で確かめる。見た目は `menudate-snapshots` で確かめる
+- 設定のウインドウ、メニューバーの項目、パネルの開閉と閉じ方（外のクリック、他のアプリの前面化、アイコンの再押下）は対象外である。実機で確かめる。見た目は `barlunari-snapshots` で確かめる
 
 保存先は `.playwright/` 配下にします。`.playwright/` は `.gitignore` に入れておきます。
 
@@ -121,15 +121,15 @@ description: MenuDate のテストを書く・実行するとき、フェイク�
 
 ```sh
 scripts/bundle.sh
-open -g -j --env MENUDATE_PANEL_SELF_CHECK=1 build/MenuDate.app
+open -g -j --env BARLUNARI_PANEL_SELF_CHECK=1 build/Barlunari.app
 # アイコンの押下と同じ処理を 1 回行わせる。開いていれば閉じる
-swift -e 'import Foundation; DistributedNotificationCenter.default().postNotificationName(.init("io.github.derushio.MenuDate.selfCheckToggle"), object: nil, userInfo: nil, deliverImmediately: true)'
-/usr/bin/log show --last 2m --predicate 'subsystem == "io.github.derushio.MenuDate" AND category == "panel"' --style compact
+swift -e 'import Foundation; DistributedNotificationCenter.default().postNotificationName(.init("io.github.derushio.Barlunari.selfCheckToggle"), object: nil, userInfo: nil, deliverImmediately: true)'
+/usr/bin/log show --last 2m --predicate 'subsystem == "io.github.derushio.Barlunari" AND category == "panel"' --style compact
 ```
 
 - 自己確認モードのパネルは、完全に透明で、マウスを通し、key にならない。利用者の画面とフォーカスは変わらない
 - ログの `open+0.3s visible=true occluded=false` で、パネルが画面に出たことを確かめる。`wasHidden` は、開く前にアプリが隠されていたか
-- 確かめ終えたら、環境変数なしで `open -g -j build/MenuDate.app` で起動し直す
+- 確かめ終えたら、環境変数なしで `open -g -j build/Barlunari.app` で起動し直す
 - key になること、Esc、外のクリックで閉じること、フルスクリーンのアプリの上に出ることは、このモードでは確かめられない。利用者が実際に使ったときの panel カテゴリのログで確かめる
 
 ## 実行コマンド
@@ -137,6 +137,6 @@ swift -e 'import Foundation; DistributedNotificationCenter.default().postNotific
 ```sh
 swift test
 swift test --filter <テスト名>
-swift run menudate-snapshots .playwright/snapshots
-swift build --product menudate-ui-driver
+swift run barlunari-snapshots .playwright/snapshots
+swift build --product barlunari-ui-driver
 ```

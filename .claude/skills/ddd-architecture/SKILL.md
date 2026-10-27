@@ -1,24 +1,24 @@
 ---
 name: ddd-architecture
-description: MenuDate にコードを追加・変更するとき、新機能を実装するとき、型をどのレイヤーに置くか迷ったとき、エンティティ・値オブジェクト・集約・ドメインサービス・リポジトリ・ユースケース・ポートの使い分けを判断するときに使います。戦術的 DDD のレイヤードアーキテクチャの責務と依存規則を定めます。
+description: Barlunari にコードを追加・変更するとき、新機能を実装するとき、型をどのレイヤーに置くか迷ったとき、エンティティ・値オブジェクト・集約・ドメインサービス・リポジトリ・ユースケース・ポートの使い分けを判断するときに使います。戦術的 DDD のレイヤードアーキテクチャの責務と依存規則を定めます。
 ---
 
 # ddd-architecture
 
-MenuDate は戦術的 DDD のレイヤードアーキテクチャで作ります。仕様はコードが正で、用語は既存のコードの名前に合わせます。
+Barlunari は戦術的 DDD のレイヤードアーキテクチャで作ります。仕様はコードが正で、用語は既存のコードの名前に合わせます。
 
 ## レイヤーの責務と依存規則
 
 | ターゲット | 責務 | 依存してよいもの |
 | --- | --- | --- |
-| `MenuDateDomain` | 業務ルールと不変条件。エンティティ、値オブジェクト、集約、ドメインサービス、リポジトリのプロトコル | Foundation だけ |
-| `MenuDateApplication` | 利用者の操作 1 つに対応するユースケース、外部サービスのポート、`CalendarAccessError` | Domain |
-| `MenuDateInfrastructure` | EventKit、UserDefaults、NSWorkspace、SMAppService の実装 | Domain, Application |
-| `MenuDatePresentation` | SwiftUI の View と `@Observable` の ViewModel | Domain, Application |
-| `MenuDatePreviewSupport` | インメモリのフェイクとサンプルデータ | Domain, Application |
-| `MenuDateApp` | `@main` とコンポジションルート | Domain, Application, Infrastructure, Presentation |
-| `menudate-snapshots` | View を PNG に出力する実行ファイル | Domain, Application, Presentation, PreviewSupport |
-| `menudate-ui-driver` | ポップオーバーを 1 操作ずつ動かして PNG を出力する実行ファイル | Domain, Application, Presentation, PreviewSupport |
+| `BarlunariDomain` | 業務ルールと不変条件。エンティティ、値オブジェクト、集約、ドメインサービス、リポジトリのプロトコル | Foundation だけ |
+| `BarlunariApplication` | 利用者の操作 1 つに対応するユースケース、外部サービスのポート、`CalendarAccessError` | Domain |
+| `BarlunariInfrastructure` | EventKit、UserDefaults、NSWorkspace、SMAppService の実装 | Domain, Application |
+| `BarlunariPresentation` | SwiftUI の View と `@Observable` の ViewModel | Domain, Application |
+| `BarlunariPreviewSupport` | インメモリのフェイクとサンプルデータ | Domain, Application |
+| `BarlunariApp` | `@main` とコンポジションルート | Domain, Application, Infrastructure, Presentation |
+| `barlunari-snapshots` | View を PNG に出力する実行ファイル | Domain, Application, Presentation, PreviewSupport |
+| `barlunari-ui-driver` | ポップオーバーを 1 操作ずつ動かして PNG を出力する実行ファイル | Domain, Application, Presentation, PreviewSupport |
 
 依存は `Package.swift` のターゲットの依存関係で強制しています。コンパイルエラーになる import を、依存関係を足して通してはいけません。置き場所を見直します。
 
@@ -45,9 +45,9 @@ MenuDate は戦術的 DDD のレイヤードアーキテクチャで作ります
 
 1. 用語を決める。既存のコードの名前に合わせる
 2. Domain: 値オブジェクト、エンティティ、ドメインサービス、リポジトリのプロトコルを追加し、単体テストを書く
-3. Application: ポートとユースケースを追加し、`MenuDatePreviewSupport` のフェイクでテストする
+3. Application: ポートとユースケースを追加し、`BarlunariPreviewSupport` のフェイクでテストする
 4. Infrastructure: プロトコルを実装する。外部の型は `EventKitValues.swift` のような値に写して閉じ込め、`EventKitMapper` のような変換でドメインの型にする。変換は値を作ってテストする
-5. Presentation: ViewModel を追加し、PreviewSupport のフェイクで組み立ててテストする。View はロジックを持たせない。`menudate-snapshots` に追加して PNG で確認する
+5. Presentation: ViewModel を追加し、PreviewSupport のフェイクで組み立ててテストする。View はロジックを持たせない。`barlunari-snapshots` に追加して PNG で確認する
 6. App: `AppContainer` で実装を組み立てる
 
 ## やってはいけないこと
@@ -62,5 +62,5 @@ MenuDate は戦術的 DDD のレイヤードアーキテクチャで作ります
 - Infrastructure の外に EventKit の型を出す。許可の状態は `CalendarAuthorizationStatus` に、失敗は `CalendarAccessError` に変換します
 - エンティティの ID を持たせずに属性だけで同一視する
 - 集約ルートを通さずに集約の内部状態を変える
-- コンポジションルート以外で具象型を生成して依存を組み立てる。例外は、`menudate-snapshots` の `Fixture`、`menudate-ui-driver` の `Harness`、`MenuDatePresentationTests` の `Harness` だけです。この 3 つは PreviewSupport のフェイクで ViewModel を組み立てます
+- コンポジションルート以外で具象型を生成して依存を組み立てる。例外は、`barlunari-snapshots` の `Fixture`、`barlunari-ui-driver` の `Harness`、`BarlunariPresentationTests` の `Harness` だけです。この 3 つは PreviewSupport のフェイクで ViewModel を組み立てます
 - 外部ライブラリを追加する

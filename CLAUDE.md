@@ -1,6 +1,6 @@
-# MenuDate
+# Barlunari
 
-MenuDate は、Google カレンダーなどの予定をメニューバーから確認する macOS アプリです。予定は EventKit で取得し、macOS の「インターネットアカウント」に追加したアカウントのカレンダーをまとめて表示します。SwiftUI と Swift Package Manager だけで作り、外部ライブラリは使いません。
+Barlunari は、Google カレンダーなどの予定をメニューバーから確認する macOS アプリです。予定は EventKit で取得し、macOS の「インターネットアカウント」に追加したアカウントのカレンダーをまとめて表示します。SwiftUI と Swift Package Manager だけで作り、外部ライブラリは使いません。
 
 仕様はコードが正です。別の仕様書は持ちません。このファイルには、コードを変えても変わらない規則だけを書き、実装の数値や型の一覧は書きません。
 
@@ -9,10 +9,10 @@ MenuDate は、Google カレンダーなどの予定をメニューバーから�
 ```sh
 swift build                                        # ビルド
 swift test                                         # 全テスト。ヘッドレスで実行されます
-swift run menudate-snapshots .playwright/snapshots # View を PNG に出力します。画面には表示しません
-swift build --product menudate-ui-driver           # AIUI テスト用の操作ツールをビルドします。使い方は headless-testing スキルです
+swift run barlunari-snapshots .playwright/snapshots # View を PNG に出力します。画面には表示しません
+swift build --product barlunari-ui-driver           # AIUI テスト用の操作ツールをビルドします。使い方は headless-testing スキルです
 scripts/bundle.sh                                  # .app を組み立てます
-open -g -j <MenuDate.app のパス>                    # 起動確認。前面に出しません
+open -g -j <Barlunari.app のパス>                    # 起動確認。前面に出しません
 ```
 
 ## 守るルール
@@ -22,26 +22,26 @@ open -g -j <MenuDate.app のパス>                    # 起動確認。前面�
 依存の向きは `Package.swift` のターゲットで強制しています。依存関係を緩めて回避してはいけません。
 
 ```
-MenuDateApp ──► Presentation ──► Application ──► Domain
+BarlunariApp ──► Presentation ──► Application ──► Domain
       │                              ▲              ▲
       └────────► Infrastructure ─────┴──────────────┘
 ```
 
 - Domain は Foundation だけに依存します
 - Presentation は Infrastructure を参照しません。EventKit の型は Infrastructure の外に出しません
-- 具象型の生成と依存の組み立ては `MenuDateApp` だけで行います。スナップショット、操作ツール、Presentation のテストは、Infrastructure を使わず、`MenuDatePreviewSupport` のフェイクで組み立てます
+- 具象型の生成と依存の組み立ては `BarlunariApp` だけで行います。スナップショット、操作ツール、Presentation のテストは、Infrastructure を使わず、`BarlunariPreviewSupport` のフェイクで組み立てます
 - ViewModel は、ユースケース、Application のポート、Presentation 内の型、`NotificationCenter` に依存します。Infrastructure の型とリポジトリには依存しません
 
 ### 新しいコードの置き場所
 
 | 書くもの | 置き場所 |
 | --- | --- |
-| 不変条件を持つ値、同一性を持つ概念、業務ルール | `MenuDateDomain` |
-| 利用者の操作 1 つに対応する処理、外部サービスのポート | `MenuDateApplication` |
-| EventKit、UserDefaults、NSWorkspace、SMAppService の実装 | `MenuDateInfrastructure` |
-| SwiftUI の View と `@Observable` の ViewModel | `MenuDatePresentation` |
-| テストとスナップショット用のフェイク実装とサンプルデータ | `MenuDatePreviewSupport` |
-| `@main` と依存の組み立て | `MenuDateApp` |
+| 不変条件を持つ値、同一性を持つ概念、業務ルール | `BarlunariDomain` |
+| 利用者の操作 1 つに対応する処理、外部サービスのポート | `BarlunariApplication` |
+| EventKit、UserDefaults、NSWorkspace、SMAppService の実装 | `BarlunariInfrastructure` |
+| SwiftUI の View と `@Observable` の ViewModel | `BarlunariPresentation` |
+| テストとスナップショット用のフェイク実装とサンプルデータ | `BarlunariPreviewSupport` |
+| `@main` と依存の組み立て | `BarlunariApp` |
 
 新機能は、ドメインから外側へ、Domain、Application、Infrastructure、Presentation、App の順に実装します。判断に迷うときは `ddd-architecture` スキルを読みます。
 
@@ -65,7 +65,7 @@ MenuDateApp ──► Presentation ──► Application ──► Domain
 
 ### スクロールと描画の性能
 
-スクロール中の 1 フレームの CPU 時間を 8.3ms 以内に保ちます。release ビルドの `menudate-ui-driver` の `scroll ... drag` で計測します。
+スクロール中の 1 フレームの CPU 時間を 8.3ms 以内に保ちます。release ビルドの `barlunari-ui-driver` の `scroll ... drag` で計測します。
 
 - 月のマス目と予定一覧の範囲は最初に固定し、スクロールに合わせて広げたり、削ったり、作り直したりしません
 - 予定は表示する範囲の全体を一度に取得し、スクロール、日の選択、月の移動では読み込み直しません
@@ -86,7 +86,7 @@ MenuDateApp ──► Presentation ──► Application ──► Domain
 - テストは Swift Testing で書き、すべてヘッドレスで実行します
 - 画面に表示するウィンドウを開く、フォーカスを奪う、カーソルを動かす操作は、テストでも手動確認でも行いません
 - AppleScript や `cliclick` を使いません。アプリの起動確認は `open -g -j` で行います
-- 見た目は `menudate-snapshots` で PNG にして Read で開いて確かめます。`menudate-snapshots` は、画面に出さないオフスクリーンの `NSWindow` に `NSHostingView` を入れて `cacheDisplay` で PNG にします。`setActivationPolicy(.prohibited)` を呼ぶので、前面にもキーにもならず、フォーカスを奪いません
+- 見た目は `barlunari-snapshots` で PNG にして Read で開いて確かめます。`barlunari-snapshots` は、画面に出さないオフスクリーンの `NSWindow` に `NSHostingView` を入れて `cacheDisplay` で PNG にします。`setActivationPolicy(.prohibited)` を呼ぶので、前面にもキーにもならず、フォーカスを奪いません
 - 詳細は `headless-testing` スキルを読みます
 
 ### コミット

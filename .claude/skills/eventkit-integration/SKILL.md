@@ -5,7 +5,7 @@ description: EventKit からのカレンダーと予定の取得、カレンダ�
 
 # eventkit-integration
 
-EventKit との連携はすべて `MenuDateInfrastructure` に閉じ込めます。仕様はコードが正です。
+EventKit との連携はすべて `BarlunariInfrastructure` に閉じ込めます。仕様はコードが正です。
 
 ## 取得
 
@@ -83,7 +83,7 @@ EventKit との連携はすべて `MenuDateInfrastructure` に閉じ込めます
 
 ## テスト
 
-- `EventKitMapper` は `EventKitEventValue` などの値を作って確かめます。`@testable import MenuDateInfrastructure` で内部の型を使います。`EKEventStore` に触れるテストは書きません。許可のダイアログを出すためです
+- `EventKitMapper` は `EventKitEventValue` などの値を作って確かめます。`@testable import BarlunariInfrastructure` で内部の型を使います。`EKEventStore` に触れるテストは書きません。許可のダイアログを出すためです
 - 終日予定の終了日、複数日の終日予定、終了が開始より前の予定、出欠の対応表、会議の URL の探す順、会議サービスでない URL を飛ばす場合、メモの URL の末尾の句読点を、分岐ごとにテストします
 - メモは、ブロックの除去（複数、対になる区切り線がない場合を含む）、空行のまとめ、空のメモを `nil` にする場合を、参加者は、`mailto:` 以外の URL、名前もメールアドレスもない参加者、主催者のまとめ方（メールアドレスの大文字小文字、名前でのまとめ、出欠の引き継ぎ）を、分岐ごとにテストします
 - 重複の除去は `AgendaBuilder` のテストで、SharedKey が同じ予定、UID を持たない予定、先のアカウントのカレンダーを非表示にした場合を確かめます
