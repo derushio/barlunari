@@ -89,6 +89,10 @@ final class Driver {
                 let title = words.dropFirst().joined(separator: " ")
                 guard !title.isEmpty else { throw DriverError.message("使い方: remote-add <タイトル>") }
                 harness.addRemoteEvent(title: title)
+            case "rsvp-fail":
+                guard words.count == 2, ["on", "off"].contains(words[1]) else { throw DriverError.message("使い方: rsvp-fail on|off") }
+                harness.setRSVPFailure(on: words[1] == "on")
+                label = "rsvp-fail-\(words[1])"
             case "store-change":
                 guard words.count == 2, let count = Int(words[1]), count > 0 else { throw DriverError.message("使い方: store-change <回数>") }
                 harness.postStoreChanges(count: count)

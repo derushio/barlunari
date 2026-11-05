@@ -27,6 +27,10 @@ final class Harness {
     /// サーバーにだけある予定を持つ予定リポジトリ。同期を求められたときに、ローカルに取り込む。
     private let eventRepository: SyncableEventRepository
     private let sourceRefresher: FakeCalendarSourceRefresher
+    /// 出欠の回答を受け取るフェイク。成功した回答は予定のリポジトリに反映し、実機の保存後と同じ変更通知を送る。
+    private let responder: FakeEventResponder
+    private let calendarAppOpener = FakeCalendarAppOpener()
+    private var isRSVPFailing = false
     /// スリープからの復帰の通知を流す、注入したワークスペースの通知センター。
     private let workspaceNotificationCenter = NotificationCenter()
     private let panel: MenuBarPanel
@@ -79,6 +83,10 @@ final class Harness {
         }
         self.eventRepository = eventRepository
         self.sourceRefresher = sourceRefresher
+        responder = FakeEventResponder { id, response in
+            eventRepository.setAttendance(response, of: id)
+            NotificationCenter.default.post(name: .calendarStoreDidChange, object: nil)
+        }
         let visibility = InMemoryCalendarVisibilityRepository()
         let displayModeStore = InMemoryDisplayModeStore()
         viewModel = CalendarPopoverViewModel(
@@ -92,6 +100,8 @@ final class Harness {
             requestCalendarAccess: RequestCalendarAccessUseCase(authorizer: authorizer),
             openSystemSettings: OpenSystemSettingsUseCase(opener: settingsOpener),
             refreshCalendarSources: RefreshCalendarSourcesUseCase(refresher: sourceRefresher),
+            respondToEvent: RespondToEventUseCase(responder: responder),
+            openEventInCalendarApp: OpenEventInCalendarAppUseCase(opener: calendarAppOpener),
             dateProvider: dateProvider,
             urlOpener: FakeURLOpener(),
             changeNotifier: DataChangeNotifier(),
@@ -244,6 +254,19 @@ final class Harness {
         return "panel=\(format(frame.minX)),\(format(frame.minY)),\(format(frame.width)),\(format(frame.height)) top=\(format(frame.maxY))"
     }
 
+    /// 出欠の回答を失敗させるかを切り替える。失敗させると、以後の回答が保存の失敗（`saveFailed`）になる。
+    func setRSVPFailure(on: Bool) {
+        isRSVPFailing = on
+        responder.setFailure(on ? EventResponseError.saveFailed : nil)
+    }
+
+    /// 開いている詳細の出欠。回答欄があれば `出欠=承諾(回答欄あり 状態=idle)`、なければ表示文、詳細を開いていなければ空。
+    private var rsvpSummary: String {
+        guard let detail = viewModel.eventDetail else { return "" }
+        if let rsvp = detail.rsvp { return " 出欠=\(rsvp.current)(回答欄あり 状態=\(viewModel.rsvpPhase))" }
+        return " 出欠=\(detail.attendanceText ?? "なし")(回答欄なし)"
+    }
+
     var stateSummary: String {
         let schedule = viewModel.selectedDaySchedule
         let rows = schedule.allDay.count + schedule.blocks.count
@@ -252,7 +275,7 @@ final class Harness {
         let settings = settingsOpener.openedDestinations.isEmpty ? "" : " システム設定=\(settingsOpener.openedDestinations)"
         let hiddenCount = viewModel.calendarFilterSections.flatMap(\.items).filter { !$0.isVisible }.count
         let filter = "\(viewModel.isCalendarFilterOpen ? "開" : "閉")(\(viewModel.calendarFilterPhase) 非表示=\(hiddenCount)件)"
-        return "モード=\(viewModel.displayMode.rawValue) カレンダー一覧=\(filter) 選択日=\(viewModel.selectedDay) 表示月=\(viewModel.displayedMonth) 状態=\(viewModel.phase) 詳細=\(detail) 一覧=\(viewModel.agendaDayCount)日 選択日の件数=\(rows)件(終日\(schedule.allDay.count) 時刻付き\(schedule.blocks.count))\(escape)\(settings) 取得=\(eventRepository.fetchCount)回 同期要求=\(sourceRefresher.refreshCount)回"
+        return "モード=\(viewModel.displayMode.rawValue) カレンダー一覧=\(filter) 選択日=\(viewModel.selectedDay) 表示月=\(viewModel.displayedMonth) 状態=\(viewModel.phase) 詳細=\(detail) 一覧=\(viewModel.agendaDayCount)日 選択日の件数=\(rows)件(終日\(schedule.allDay.count) 時刻付き\(schedule.blocks.count))\(escape)\(settings) \(rsvpSummary) 回答=\(responder.responses.count)件 回答失敗=\(isRSVPFailing ? "on" : "off") カレンダーで開いた=\(calendarAppOpener.openedEvents.count)件 取得=\(eventRepository.fetchCount)回 同期要求=\(sourceRefresher.refreshCount)回"
     }
 
     // MARK: イベントの合成
