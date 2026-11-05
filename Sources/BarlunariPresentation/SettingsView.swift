@@ -29,6 +29,10 @@ public struct SettingsView: View {
                 .tabItem { Label("カレンダー", systemImage: "calendar") }
                 .tag(Tab.calendars)
         }
+        // TabView はタブの切り替えの部品を枠の上辺に重ねて描く。周りに余白を取らないと、部品がタイトルバーの区切り線に接し、
+        // 枠の線がウインドウの端に重なる。
+        .padding(.top, 12)
+        .padding([.horizontal, .bottom], 20)
         .frame(width: Self.width, height: Self.height)
         .task { await viewModel.load() }
         .onChange(of: viewModel.changeRevision) { Task { await viewModel.refreshIfChangedElsewhere() } }
