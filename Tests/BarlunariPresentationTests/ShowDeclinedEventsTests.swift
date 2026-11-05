@@ -19,7 +19,7 @@ import Testing
     }
 
     /// 設定画面での変更を、ポップオーバーの View と同じ流れ（`changeRevision` の変化 → `reloadIfChangedElsewhere`）で反映する。
-    func applyChange(_ harness: Harness, _ viewModel: CalendarPopoverViewModel) async {
+    func applyChange(_ viewModel: CalendarPopoverViewModel) async {
         viewModel.reloadIfChangedElsewhere()
         await viewModel.waitForLoad()
     }
@@ -31,7 +31,7 @@ import Testing
         #expect(titles(viewModel, on: oct24) == ["朝会", "デザインレビュー", "辞退した会議", "夕食"])
 
         harness.settings.setShowDeclinedEvents(false)
-        await applyChange(harness, viewModel)
+        await applyChange(viewModel)
 
         #expect(titles(viewModel, on: oct24) == ["朝会", "デザインレビュー", "夕食"])
     }
@@ -43,7 +43,7 @@ import Testing
         #expect(titles(viewModel, on: oct24) == ["朝会", "デザインレビュー", "夕食"])
 
         harness.settings.setShowDeclinedEvents(true)
-        await applyChange(harness, viewModel)
+        await applyChange(viewModel)
 
         #expect(titles(viewModel, on: oct24) == ["朝会", "デザインレビュー", "辞退した会議", "夕食"])
     }
