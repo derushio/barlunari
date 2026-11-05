@@ -285,6 +285,39 @@ import Testing
         #expect(viewModel.eventDetail?.title == "新機能の企画会議（変更）")
     }
 
+    @Test func 辞退のあと別の場所で承諾に戻されて予定が一覧に戻ったら詳細は新しい内容になる() async throws {
+        let harness = Harness()
+        let viewModel = await openInvitation(harness)
+        await viewModel.respond(.declined)
+        await reload(harness, viewModel, returning: events(replacing: invitation, with: invitation.responded(with: .declined)))
+        let renamed = CalendarEvent(
+            accountID: invitation.accountID, id: invitation.eventID, calendarID: invitation.calendarID,
+            title: "新機能の企画会議（カレンダーで変更）", schedule: invitation.schedule, attendance: .accepted
+        )
+
+        // カレンダー.app で承諾に戻されると、予定が一覧に戻る。
+        await reload(harness, viewModel, returning: events(replacing: invitation, with: renamed))
+
+        #expect(viewModel.eventDetail?.title == "新機能の企画会議（カレンダーで変更）")
+        #expect(viewModel.eventDetail?.rsvp?.current == .accepted)
+    }
+
+    @Test func 保存の前に始まった読み込みの結果では回答した値を捨てない() async throws {
+        let harness = Harness()
+        let viewModel = await openInvitation(harness)
+        await harness.eventRepository.gate()
+        let index = await harness.eventRepository.pendingCount
+        viewModel.reload()
+        while await harness.eventRepository.pendingCount < index + 1 { await Task.yield() }
+
+        await viewModel.respond(.tentative)
+        // 保存の前に始まった読み込みは、保存前の出欠（未回答）の予定を返す。
+        await harness.eventRepository.resume(at: index, events: SampleData.events)
+        await viewModel.waitForLoad()
+
+        #expect(viewModel.eventDetail?.rsvp?.current == .tentative)
+    }
+
     // MARK: - 変更通知
 
     @Test func 変更通知による読み直しは回答の前後で増えない() async throws {

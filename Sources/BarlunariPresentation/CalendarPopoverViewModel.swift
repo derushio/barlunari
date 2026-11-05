@@ -119,8 +119,11 @@ public final class CalendarPopoverViewModel {
     ///
     /// 辞退した予定は、読み直すと `AgendaBuilder` が一覧から除くため、スナップショットに残らない。
     /// 詳細を開いたまま辞退しても詳細を消さず、押し間違いを取り消せるよう、読み直しで予定が消えてもこの値で詳細を出し続ける。
-    /// 読み直した予定の出欠が同じ値になったら、スナップショットの予定に任せてこの値を捨てる。辞退以外の回答で予定が消えたら、削除されたとみなして捨てる。
+    /// 保存の後に始まった読み込みの結果に予定があれば、出欠を問わずスナップショットの予定に任せてこの値を捨てる。予定がなく、辞退以外の回答なら、削除されたとみなして捨てる。
     private var respondedEvent: CalendarEvent?
+    /// `respondedEvent` を設定した時点の `loadGeneration`。これより後に始まった読み込みの結果でだけ、`respondedEvent` を照合する。
+    /// 保存の前に始まった読み込みの結果は、保存前の出欠を持つため、照合に使わない。
+    private var respondedEventGeneration = 0
 
     /// 許可を求めている間は `true`。許可のダイアログは 1 つしか出せないため、続けて押されても求め直さない。
     public private(set) var isRequestingAccess = false
@@ -736,6 +739,7 @@ public final class CalendarPopoverViewModel {
             try await respondToEvent.execute(event: event, response: response)
             guard detailEventID == id else { return }
             respondedEvent = event.responded(with: response)
+            respondedEventGeneration = loadGeneration
             rsvpPhase = .idle
         } catch {
             guard detailEventID == id else { return }
@@ -980,14 +984,7 @@ public final class CalendarPopoverViewModel {
             loadedRange = range
             lastUpdated = dateProvider.now
             phase = .loaded
-            // 回答した予定は、読み直した予定の出欠が回答と同じになったら、スナップショットの予定に任せる。
-            if let responded = respondedEvent, let fresh = event(for: responded.id), fresh.attendance == responded.attendance {
-                respondedEvent = nil
-            }
-            // 辞退以外で回答した予定が読み直しで消えたら、削除されたとみなして回答した値を捨てる。
-            if let responded = respondedEvent, responded.attendance != .declined, event(for: responded.id) == nil {
-                respondedEvent = nil
-            }
+            reconcileRespondedEvent(generation: generation)
             // 読み直した結果に詳細の予定がなければ、一覧に戻る。辞退した予定は、回答した値で詳細に残す。
             if let detailEventID, detailEvent(for: detailEventID) == nil { closeDetail() }
         } catch is CancellationError {
@@ -1038,6 +1035,17 @@ public final class CalendarPopoverViewModel {
             if let event = agenda.events.first(where: { $0.id == identity }) { return event }
         }
         return nil
+    }
+
+    /// 回答した直後の予定を、保存の後に始まった読み込みの結果と照合する。
+    ///
+    /// 予定がスナップショットにあれば、出欠が一致するかを問わず捨てる（カレンダー.app などで回答が変わっていても、新しい内容を出す）。
+    /// 予定がなく、回答が辞退なら残す（一覧から除かれただけである）。辞退以外なら、削除されたとみなして捨てる。
+    private func reconcileRespondedEvent(generation: Int) {
+        guard let responded = respondedEvent, generation > respondedEventGeneration else { return }
+        if event(for: responded.id) != nil || responded.attendance != .declined {
+            respondedEvent = nil
+        }
     }
 
     /// 詳細に出す予定。回答した直後の予定があれば、それを使う。
