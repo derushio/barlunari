@@ -1,9 +1,6 @@
 import SwiftUI
 import BarlunariDomain
 
-/// 予定一覧の領域と入れ替えて出す、予定の詳細。
-///
-/// リンクと「参加」ボタンは環境の `openURL` で開く。`CalendarPopoverView` が `openURL` を ViewModel に向ける。
 /// 詳細の出欠の回答欄から呼ぶ操作。View に ViewModel を持たせず、押されたときの処理だけを渡す。
 struct EventDetailActions {
     var respond: (AttendanceResponse) -> Void = { _ in }
@@ -18,6 +15,9 @@ struct EventDetailActions {
     init() {}
 }
 
+/// 予定一覧の領域と入れ替えて出す、予定の詳細。
+///
+/// リンクと「参加」ボタンは環境の `openURL` で開く。`CalendarPopoverView` が `openURL` を ViewModel に向ける。
 struct EventDetailView: View {
     /// 詳細の高さの上限。これを超えたらスクロールする。一覧に戻るボタンは含まない。
     static let maxHeight: CGFloat = 300
