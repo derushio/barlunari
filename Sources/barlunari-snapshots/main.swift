@@ -50,6 +50,7 @@ struct Fixture {
         eventError: (any Error)? = nil,
         events sampleEvents: [CalendarEvent] = SampleData.events,
         displayMode: CalendarDisplayMode = .compact,
+        showDeclinedEvents: Bool? = nil,
         rsvpFailure: (any Error)? = nil,
         rsvpOutcome: EventResponseOutcome = .saved
     ) {
@@ -65,6 +66,7 @@ struct Fixture {
         let openSystemSettings = OpenSystemSettingsUseCase(opener: FakeSystemSettingsOpener())
         let notifier = DataChangeNotifier()
         let displayModeStore = InMemoryDisplayModeStore(mode: displayMode)
+        let showDeclinedEventsStore = InMemoryShowDeclinedEventsStore(value: showDeclinedEvents)
 
         popover = CalendarPopoverViewModel(
             loadAgenda: LoadAgendaUseCase(
@@ -72,6 +74,7 @@ struct Fixture {
                 calendarRepository: calendarRepository,
                 eventRepository: eventRepository,
                 visibilityRepository: visibility,
+                showDeclinedEventsStore: showDeclinedEventsStore,
                 dateProvider: dateProvider
             ),
             requestCalendarAccess: requestAccess,
@@ -93,6 +96,8 @@ struct Fixture {
         settings = SettingsViewModel(
             getLaunchAtLogin: GetLaunchAtLoginUseCase(service: launchAtLogin),
             setLaunchAtLogin: SetLaunchAtLoginUseCase(service: launchAtLogin),
+            loadShowDeclinedEvents: LoadShowDeclinedEventsUseCase(store: showDeclinedEventsStore),
+            saveShowDeclinedEvents: SaveShowDeclinedEventsUseCase(store: showDeclinedEventsStore),
             listCalendars: ListCalendarsUseCase(
                 authorizer: authorizer, calendarRepository: calendarRepository, visibilityRepository: visibility
             ),
@@ -398,6 +403,14 @@ func runSnapshots(outputDirectory: URL) async throws {
         fixture.popover.showSchedule(of: SampleData.day(2026, 10, day))
         try await render(popoverView(fixture), appearance: appearance, to: output(name))
     }
+    // 「辞退した予定を表示」をオフにした月表示。10 月 24 日の日の欄から辞退した予定が消え、月のマス目にも出ない。
+    do {
+        let fixture = Fixture(events: SampleData.monthViewEvents, displayMode: .month, showDeclinedEvents: false)
+        fixture.popover.reload()
+        await fixture.popover.waitForLoad()
+        fixture.popover.showSchedule(of: SampleData.day(2026, 10, 24))
+        try await render(popoverView(fixture), appearance: .aqua, to: output("month-day-declined-hidden-light"))
+    }
     // 未回答と辞退の終日の予定。月のマス目の帯と、日の欄の終日の行を確かめる。
     for (name, appearance) in [("month-attendance-allday-light", NSAppearance.Name.aqua), ("month-attendance-allday-dark", .darkAqua)] {
         func allDay(_ id: String, _ title: String, from day: Int, days: Int, attendance: AttendanceStatus) -> CalendarEvent {
@@ -477,6 +490,11 @@ func runSnapshots(outputDirectory: URL) async throws {
     for (name, tab) in [("general", SettingsView.Tab.general), ("calendars", .calendars)] {
         try await render(SettingsView(viewModel: settings.settings, initialTab: tab), appearance: .aqua, to: output("settings-\(name)"))
     }
+
+    // 「辞退した予定を表示」をオフにして保存したあとに開いた一般タブ。
+    let settingsDeclinedOff = Fixture(showDeclinedEvents: false)
+    await settingsDeclinedOff.settings.load()
+    try await render(SettingsView(viewModel: settingsDeclinedOff.settings), appearance: .aqua, to: output("settings-general-declined-off"))
 
     // 設定のカレンダータブの案内。
     let settingsGuides: [(String, Fixture)] = [
