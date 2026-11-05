@@ -92,6 +92,7 @@ description: Barlunari のテストを書く・実行するとき、フェイク
 | `store-change <回数>` | `.calendarStoreDidChange` を指定した回数、続けて送る。読み直しは進行中の取得を取り消さず 1 回にまとまるので、`取得=` は増えても 1 か 2 である。同期は求めない |
 | `wake` | 注入したワークスペースの通知センターに `NSWorkspace.didWakeNotification` を送る。同期を求め、読み直す |
 | `appearance light\|dark` | パネルの外観を切り替える。既定はライト。パレットの色の役割（塗り、薄い背景、点と線）がライトとダークで切り替わることを確かめる |
+| （状態の行）`設定を開いた=` と `終了=` | パネル下部の「設定」と「終了」が押された回数。操作ツールでは、設定のウインドウを開かず、アプリも終了しない。下部のボタンの押せる範囲と、押し間違いがないかをこの回数で確かめる |
 | `settings open` / `settings close` | `open` は、ポップオーバーと同じ `DataChangeNotifier` を共有する `SettingsView` を、ポップオーバーと同じく完全に透明で背面のオフスクリーンのウインドウ（key にしない）に作り、以降の click、hover、scroll、key、screenshot の対象にする。開くたびに作り直すので、保存した値の表示も確かめられる。`close` は対象をポップオーバーに戻す。一般タブの「辞退した予定を表示」のトグルは (414, 123) にある。結果の 1 行の `操作対象=` が `ポップオーバー` か `設定` で、`辞退した予定を表示=on|off(保存=[...])` は設定の値と、トグルで保存した値の履歴である |
 | `hide` / `show` | パネルを隠して出し直す。`hide` はアプリの `MenuBarController.close` と同じ `orderOut`、`show` は同じインスタンスを出し直し、`popoverDidAppear()` を呼ぶ。アプリではパネルが key になったときに `popoverDidAppear()` が呼ばれる。アプリは `orderFrontRegardless` と `makeKey` で出すが、操作ツールは完全に透明・背面・key にしない設定を保つため `orderBack` で出す。ウインドウが隠れたときと出たときの処理（先に用意した画像を捨てる、出た直後の先の用意）を再現する。性能の計測では `chain hide ; wait 300 ; show ; wait 3500 ; scroll ... drag` のように使う |
 | `placement <user\|single> <x> <y> [compact]` | 仮想のディスプレイの配置（`user` は利用者の 3 枚、`single` は 1 枚。座標は画面座標で左下原点）とクリックの位置から、パネルのフレームを返す。ウインドウは作らず、何も出さない |
