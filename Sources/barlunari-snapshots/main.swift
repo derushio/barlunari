@@ -41,6 +41,7 @@ struct Fixture {
     let popover: CalendarPopoverViewModel
     let settings: SettingsViewModel
     let events: SnapshotEventRepository
+    let responder: FakeEventResponder
 
     init(
         status: CalendarAuthorizationStatus = .fullAccess,
@@ -48,8 +49,10 @@ struct Fixture {
         calendars: [UserCalendar] = SampleData.calendars,
         eventError: (any Error)? = nil,
         events sampleEvents: [CalendarEvent] = SampleData.events,
-        displayMode: CalendarDisplayMode = .compact
+        displayMode: CalendarDisplayMode = .compact,
+        rsvpFailure: (any Error)? = nil
     ) {
+        responder = FakeEventResponder(failure: rsvpFailure)
         let dateProvider = FixedDateProvider()
         let authorizer = FakeCalendarAccessAuthorizer(status: status)
         let calendarRepository = InMemoryCalendarRepository(accounts: accounts, calendars: calendars)
@@ -73,6 +76,8 @@ struct Fixture {
             requestCalendarAccess: requestAccess,
             openSystemSettings: openSystemSettings,
             refreshCalendarSources: RefreshCalendarSourcesUseCase(refresher: FakeCalendarSourceRefresher()),
+            respondToEvent: RespondToEventUseCase(responder: responder),
+            openEventInCalendarApp: OpenEventInCalendarAppUseCase(opener: FakeCalendarAppOpener()),
             dateProvider: dateProvider,
             urlOpener: FakeURLOpener(),
             changeNotifier: notifier,
@@ -230,6 +235,42 @@ func runSnapshots(outputDirectory: URL) async throws {
         try await render(popoverView(fixture), appearance: .aqua, to: output("popover-detail-minimal"))
     }
 
+    // 出欠の回答欄。未回答の招待をライトとダークで、承諾した後と、保存に失敗した後（カレンダーで開くボタン付き）を描く。
+    guard let invitationID = SampleData.events.first(where: { $0.title == "新機能の企画会議" })?.id else {
+        throw SnapshotError.renderFailed("サンプルに「新機能の企画会議」がない")
+    }
+    for (name, appearance) in [("popover-detail-rsvp-light", NSAppearance.Name.aqua), ("popover-detail-rsvp-dark", .darkAqua)] {
+        let fixture = Fixture()
+        fixture.popover.reload()
+        await fixture.popover.waitForLoad()
+        fixture.popover.showDetail(of: invitationID)
+        try await render(popoverView(fixture), appearance: appearance, to: output(name))
+    }
+    for (name, appearance) in [("popover-detail-rsvp-accepted-light", NSAppearance.Name.aqua), ("popover-detail-rsvp-accepted-dark", .darkAqua)] {
+        let fixture = Fixture()
+        fixture.popover.reload()
+        await fixture.popover.waitForLoad()
+        fixture.popover.showDetail(of: invitationID)
+        await fixture.popover.respond(.accepted)
+        try await render(popoverView(fixture), appearance: appearance, to: output(name))
+    }
+    do {
+        let fixture = Fixture()
+        fixture.popover.reload()
+        await fixture.popover.waitForLoad()
+        fixture.popover.showDetail(of: invitationID)
+        await fixture.popover.respond(.declined)
+        try await render(popoverView(fixture), appearance: .aqua, to: output("popover-detail-rsvp-declined-light"))
+    }
+    for (name, appearance) in [("popover-detail-rsvp-error-light", NSAppearance.Name.aqua), ("popover-detail-rsvp-error-dark", .darkAqua)] {
+        let fixture = Fixture(rsvpFailure: EventResponseError.saveFailed)
+        fixture.popover.reload()
+        await fixture.popover.waitForLoad()
+        fixture.popover.showDetail(of: invitationID)
+        await fixture.popover.respond(.accepted)
+        try await render(popoverView(fixture), appearance: appearance, to: output(name))
+    }
+
     // ポップオーバー（月曜始まりの別の日を選択した状態）
     do {
         let fixture = Fixture()
@@ -285,6 +326,11 @@ func runSnapshots(outputDirectory: URL) async throws {
         let fixture = await loadedMonth()
         fixture.popover.showDetail(of: try eventID(titled: "デザインレビュー"))
         try await render(popoverView(fixture), appearance: appearance, to: output(name))
+    }
+    do {
+        let fixture = await loadedMonth()
+        fixture.popover.showDetail(of: invitationID)
+        try await render(popoverView(fixture), appearance: .aqua, to: output("month-detail-rsvp-light"))
     }
     func openedCalendarFilter(_ fixture: Fixture) async {
         fixture.popover.reload()
