@@ -226,11 +226,15 @@ import Testing
 
     @Test func 他のウインドウが前面になっても詳細は閉じない() async throws {
         let viewModel = await Harness().loadedPopover()
-        viewModel.popoverWindowDidChange(ObjectIdentifier(NSObject()), isKey: false)
+        // 解放された NSObject のアドレスは再利用され、2 つの ObjectIdentifier が一致しうる。両方を保持して別のウインドウにする。
+        let popoverWindow = NSObject()
+        let otherWindow = NSObject()
+        viewModel.popoverWindowDidChange(ObjectIdentifier(popoverWindow), isKey: false)
         viewModel.showDetail(of: try designReview(viewModel))
 
-        viewModel.windowDidBecomeKey(ObjectIdentifier(NSObject()))
+        viewModel.windowDidBecomeKey(ObjectIdentifier(otherWindow))
 
+        withExtendedLifetime((popoverWindow, otherWindow)) {}
         #expect(viewModel.eventDetail != nil)
     }
 
