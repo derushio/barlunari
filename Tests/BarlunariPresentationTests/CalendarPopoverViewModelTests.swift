@@ -22,7 +22,7 @@ import Testing
         #expect(sections[1].title == "10月25日(日)")
         #expect(sections[1].relativeLabel == "明日")
         #expect(sections[2].relativeLabel == nil)
-        #expect(sections[0].rows.map(\.title) == ["朝会", "デザインレビュー", "夕食"])
+        #expect(sections[0].rows.map(\.title) == ["朝会", "デザインレビュー", "辞退した会議", "夕食"])
         #expect(sections[1].rows.map(\.timeText) == ["終日"])
     }
 
@@ -48,7 +48,8 @@ import Testing
         #expect(!rows[1].isPast)
         #expect(rows[1].location == "会議室 A")
         #expect(rows[1].color == SampleData.workCalendar.color)
-        #expect(rows[2].color == SampleData.personalCalendar.color)
+        #expect(rows[2].color == SampleData.workCalendar.color)
+        #expect(rows[3].color == SampleData.personalCalendar.color)
     }
 
     @Test func 日をまたぐ予定はその日に収まる側の時刻だけを出す() async throws {
@@ -68,7 +69,7 @@ import Testing
         // カレンダー一覧の取得は、予定の読み込みが呼ぶ `LoadAgendaUseCase` の内側で 1 回だけ行う。
         #expect(await harness.calendarRepository.callCount == 1)
         #expect(viewModel.selectedSection.rows.map(\.color) == [
-            SampleData.workCalendar.color, SampleData.workCalendar.color, SampleData.personalCalendar.color,
+            SampleData.workCalendar.color, SampleData.workCalendar.color, SampleData.workCalendar.color, SampleData.personalCalendar.color,
         ])
     }
 
@@ -311,7 +312,7 @@ import Testing
 
         #expect(await harness.authorizer.requestCount == 1)
         #expect(viewModel.phase == .loaded)
-        #expect(viewModel.selectedSection.rows.map(\.title) == ["朝会", "デザインレビュー", "夕食"])
+        #expect(viewModel.selectedSection.rows.map(\.title) == ["朝会", "デザインレビュー", "辞退した会議", "夕食"])
     }
 
     @Test func 許可のボタンで拒否されたらシステム設定を開く案内にする() async {

@@ -90,17 +90,25 @@ struct AgendaRowView: View {
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
+        let accent = state.color.paletteRoles(colorScheme).accentColor
+        let isDeclined = state.attendance == .declined
         HStack(alignment: .center, spacing: 8) {
             Button(action: onShowDetail) {
                 HStack(alignment: .top, spacing: 8) {
                     RoundedRectangle(cornerRadius: 1.5)
-                        .fill(state.color.paletteRoles(colorScheme).accentColor)
-                        .opacity(state.isPast ? CalendarPalette.pastOpacity : 1)
+                        .fill(accent)
+                        .opacity(isDeclined ? CalendarPalette.pastTextOpacity : state.isPast ? CalendarPalette.pastOpacity : 1)
                         .frame(width: 3)
                     VStack(alignment: .leading, spacing: 1) {
-                        Text(state.timeText).font(.caption2).foregroundStyle(.secondary).monospacedDigit()
+                        HStack(spacing: 6) {
+                            Text(state.timeText).font(.caption2).foregroundStyle(.secondary).monospacedDigit()
+                            if let label = state.attendance.label {
+                                Text(label).font(.caption2.weight(.medium)).foregroundStyle(.secondary)
+                            }
+                        }
                         Text(state.title).font(.callout).lineLimit(2)
-                            .opacity(state.isPast ? CalendarPalette.pastTextOpacity : 1)
+                            .strikethrough(isDeclined)
+                            .opacity(state.isPast || isDeclined ? CalendarPalette.pastTextOpacity : 1)
                         if let location = state.location {
                             Label(location, systemImage: "mappin.and.ellipse")
                                 .font(.caption2)
@@ -115,11 +123,18 @@ struct AgendaRowView: View {
                 .background(
                     RoundedRectangle(cornerRadius: 6).fill(Color.primary.opacity(isHovering ? 0.08 : 0))
                 )
+                .overlay {
+                    if state.attendance == .needsResponse {
+                        RoundedRectangle(cornerRadius: 6)
+                            .strokeBorder(accent, style: StrokeStyle(lineWidth: 1, dash: CalendarPalette.needsResponseDash))
+                    }
+                }
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .onHover { isHovering = $0 }
             .pointerStyle(.link)
+            .accessibilityLabel(state.accessibilityLabel)
             .accessibilityHint("予定の詳細を開きます")
 
             if state.hasMeetingURL {

@@ -68,11 +68,14 @@ struct MonthWeekRowView: View {
     }
 
     /// 時刻付きの予定は時刻とタイトル、バーはタイトルだけを読ませる。バーには終日の予定のほか、日をまたぐ時刻付きの予定も入る。
+    /// 未回答と辞退は、末尾に「未回答」「辞退」を付ける。
     static func accessibilityLabel(of item: MonthWeekLayout.Item) -> String {
-        switch item.kind {
+        let base = switch item.kind {
         case .timed(let timeText): "\(timeText) \(item.title)"
         case .bar: item.title
         }
+        guard let label = item.attendance.label else { return base }
+        return "\(base)、\(label)"
     }
 }
 
@@ -503,23 +506,37 @@ enum MonthWeekPainter {
                 bottomTrailingRadius: continuesToNext ? 0 : barRadius,
                 topTrailingRadius: continuesToNext ? 0 : barRadius
             )
-            if item.isPast {
+            let barPath = shape.path(in: bar)
+            if item.attendance == .declined {
+                // 辞退した帯は塗らず、薄い背景だけにして、取り消し線を引く。左端の線は引かないので、過去の帯とも区別できる。
+                context.fill(barPath, with: .color(roles.tintColor.opacity(CalendarPalette.pastTextOpacity)))
+                drawText(
+                    item.title, style: .title, color: .pastPrimary, in: &context,
+                    from: bar.minX + 6, to: bar.maxX - 4, midY: bar.midY, strikethrough: true
+                )
+            } else if item.isPast || item.attendance == .needsResponse {
                 // 過去の帯は塗らず、薄い背景と左端の線にして、標準の文字色で描く。未来の塗りの帯と形で区別する。
-                let barPath = shape.path(in: bar)
+                // 未回答の帯も塗らず、薄い背景を予定の色の点線で囲む。
                 context.fill(barPath, with: .color(roles.tintColor))
-                if !continuesFromPrevious {
+                if item.isPast && !continuesFromPrevious {
                     let edge = CGRect(x: bar.minX, y: bar.minY, width: pastBarEdgeWidth, height: bar.height)
                     let edgeShape = UnevenRoundedRectangle(
                         topLeadingRadius: barRadius, bottomLeadingRadius: barRadius, bottomTrailingRadius: 0, topTrailingRadius: 0
                     )
                     context.fill(edgeShape.path(in: edge), with: .color(roles.accentColor.opacity(CalendarPalette.pastOpacity)))
                 }
+                if item.attendance == .needsResponse {
+                    context.stroke(
+                        shape.path(in: bar.insetBy(dx: 0.5, dy: 0.5)), with: .color(roles.accentColor),
+                        style: StrokeStyle(lineWidth: 1, dash: CalendarPalette.needsResponseDash)
+                    )
+                }
                 drawText(
                     item.title, style: .title, color: .primary, in: &context,
                     from: bar.minX + 6, to: bar.maxX - 4, midY: bar.midY
                 )
             } else {
-                context.fill(shape.path(in: bar), with: .color(roles.fillColor))
+                context.fill(barPath, with: .color(roles.fillColor))
                 drawText(
                     item.title, style: .title, color: roles.onFill == 0xFFFFFF ? .white : .ink, in: &context,
                     from: bar.minX + 6, to: bar.maxX - 4, midY: bar.midY
@@ -534,16 +551,27 @@ enum MonthWeekPainter {
                     with: .color(roles.accentColor.opacity(CalendarPalette.pastOpacity)), lineWidth: pastDotLineWidth
                 )
             } else {
-                context.fill(Path(ellipseIn: dot), with: .color(roles.accentColor))
+                let opacity = item.attendance == .declined ? CalendarPalette.pastTextOpacity : 1
+                context.fill(Path(ellipseIn: dot), with: .color(roles.accentColor.opacity(opacity)))
+            }
+            let isDeclined = item.attendance == .declined
+            let needsResponse = item.attendance == .needsResponse
+            // 未回答は、点・時刻・タイトルの行全体を予定の色の点線で囲む。枠の分だけ右端を内側に寄せる。
+            let textMaxX = row.maxX - (needsResponse ? 4 : 2)
+            if needsResponse {
+                context.stroke(
+                    Path(roundedRect: row.insetBy(dx: 0.5, dy: 0.5), cornerRadius: barRadius), with: .color(roles.accentColor),
+                    style: StrokeStyle(lineWidth: 1, dash: CalendarPalette.needsResponseDash)
+                )
             }
             let timeX = dot.maxX + 4
             let timeWidth = drawText(
                 timeText, style: .time, color: .secondary, in: &context,
-                from: timeX, to: row.maxX - 2, midY: row.midY
+                from: timeX, to: textMaxX, midY: row.midY
             )
             drawText(
-                item.title, style: .title, color: item.isPast ? .pastPrimary : .primary, in: &context,
-                from: timeX + timeWidth + 4, to: row.maxX - 2, midY: row.midY
+                item.title, style: .title, color: item.isPast || isDeclined ? .pastPrimary : .primary, in: &context,
+                from: timeX + timeWidth + 4, to: textMaxX, midY: row.midY, strikethrough: isDeclined
             )
         }
     }
@@ -589,10 +617,11 @@ enum MonthWeekPainter {
     private static let fitCacheLimit = 20_000
 
     /// 1 行の文字を、`from` から `to` の幅に収めて描く。収まらないときは末尾を「…」にする。描いた文字の幅を返す。
+    /// `strikethrough` なら、描いた幅の分だけ文字の中央に線を引く。
     @discardableResult
     private static func drawText(
         _ string: String, style: TextStyle, color: TextColor, in context: inout GraphicsContext,
-        from minX: CGFloat, to maxX: CGFloat, midY: CGFloat
+        from minX: CGFloat, to maxX: CGFloat, midY: CGFloat, strikethrough: Bool = false
     ) -> CGFloat {
         let available = maxX - minX
         guard available > 0 else { return 0 }
@@ -601,6 +630,13 @@ enum MonthWeekPainter {
         guard let text = fit.text else { return 0 }
         let resolved = resolvedText(text, style: style, color: color, in: context)
         context.draw(resolved, at: CGPoint(x: minX, y: midY), anchor: .leading)
+        if strikethrough {
+            // 解決した文字には取り消し線を付けられないので、描いた幅を使って線を引く。
+            var line = Path()
+            line.move(to: CGPoint(x: minX, y: midY))
+            line.addLine(to: CGPoint(x: minX + fit.width, y: midY))
+            context.stroke(line, with: .color(color.value), lineWidth: 1)
+        }
         return fit.width
     }
 

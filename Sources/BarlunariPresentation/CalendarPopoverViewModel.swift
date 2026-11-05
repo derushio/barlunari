@@ -124,8 +124,8 @@ public final class CalendarPopoverViewModel {
 
     /// 回答した直後の予定。自分の出欠を回答の値にしたもの。
     ///
-    /// 辞退した予定は、読み直すと `AgendaBuilder` が一覧から除くため、スナップショットに残らない。
-    /// 詳細を開いたまま辞退しても詳細を消さず、押し間違いを取り消せるよう、読み直しで予定が消えてもこの値で詳細を出し続ける。
+    /// 辞退した予定も一覧に残るので、読み直したスナップショットには辞退した予定が入る。
+    /// 詳細を開いたまま辞退しても詳細を消さず、押し間違いを取り消せるよう、読み直しの結果に予定がなくてもこの値で詳細を出し続ける。
     /// 保存の後に始まった読み込みの結果に予定があれば、出欠を問わずスナップショットの予定に任せてこの値を捨てる。予定がなく、辞退以外の回答なら、削除されたとみなして捨てる。
     private var respondedEvent: CalendarEvent?
     /// `respondedEvent` を設定した時点の `loadGeneration`。これより後に始まった読み込みの結果でだけ、`respondedEvent` を照合する。
@@ -402,7 +402,8 @@ public final class CalendarPopoverViewModel {
                 title: event.title.isEmpty ? "(タイトルなし)" : event.title,
                 timeText: timeText(of: event.schedule, on: day),
                 calendarName: snapshot.calendar(for: event.calendarIdentity)?.name,
-                isPast: event.schedule.hasEnded(on: day, at: now, calendar: calendar)
+                isPast: event.schedule.hasEnded(on: day, at: now, calendar: calendar),
+                attendance: ListedAttendance(event)
             )
         }
 
@@ -1008,7 +1009,7 @@ public final class CalendarPopoverViewModel {
             lastUpdated = dateProvider.now
             phase = .loaded
             reconcileRespondedEvent(generation: generation)
-            // 読み直した結果に詳細の予定がなければ、一覧に戻る。辞退した予定は、回答した値で詳細に残す。
+            // 読み直した結果に詳細の予定がなければ、一覧に戻る。辞退した予定は、スナップショットになければ回答した値で詳細に残す。
             // 回答の保存中は、保存が起こした変更通知の読み直しが先に届いても閉じない。閉じるかどうかは `respond` が保存の後に決める。
             if let detailEventID, detailEvent(for: detailEventID) == nil, !isResponding { closeDetail() }
         } catch is CancellationError {
@@ -1064,7 +1065,7 @@ public final class CalendarPopoverViewModel {
     /// 回答した直後の予定を、保存の後に始まった読み込みの結果と照合する。
     ///
     /// 予定がスナップショットにあれば、出欠が一致するかを問わず捨てる（カレンダー.app などで回答が変わっていても、新しい内容を出す）。
-    /// 予定がなく、回答が辞退なら残す（一覧から除かれただけである）。辞退以外なら、削除されたとみなして捨てる。
+    /// 予定がなく、回答が辞退なら残す（押し間違いを取り消せるようにする）。辞退以外なら、削除されたとみなして捨てる。
     private func reconcileRespondedEvent(generation: Int) {
         guard let responded = respondedEvent, generation > respondedEventGeneration else { return }
         if event(for: responded.id) != nil || responded.attendance != .declined {
@@ -1095,7 +1096,8 @@ public final class CalendarPopoverViewModel {
             title: event.title.isEmpty ? "(タイトルなし)" : event.title,
             location: event.location.flatMap { $0.isEmpty ? nil : $0 },
             isPast: event.schedule.hasEnded(on: day, at: now, calendar: calendar),
-            hasMeetingURL: event.meetingURL != nil
+            hasMeetingURL: event.meetingURL != nil,
+            attendance: ListedAttendance(event)
         )
     }
 

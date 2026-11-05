@@ -61,6 +61,12 @@ public struct AgendaRowState: Identifiable, Equatable, Sendable {
     public let location: String?
     public let isPast: Bool
     public let hasMeetingURL: Bool
+    public let attendance: ListedAttendance
+
+    /// VoiceOver に読ませる文。時刻、タイトル、出欠の順。
+    public var accessibilityLabel: String {
+        [timeText, title, attendance.label].compactMap { $0 }.joined(separator: "、")
+    }
 }
 
 /// 予定一覧の 1 日分。
@@ -87,10 +93,11 @@ public struct DayScheduleItem: Identifiable, Equatable, Sendable {
     public let timeText: String
     public let calendarName: String?
     public let isPast: Bool
+    public let attendance: ListedAttendance
 
-    /// VoiceOver に読ませる文。時刻、タイトル、カレンダーの名前の順。
+    /// VoiceOver に読ませる文。時刻、タイトル、カレンダーの名前、出欠の順。
     public var accessibilityLabel: String {
-        [timeText, title, calendarName].compactMap { $0 }.joined(separator: "、")
+        [timeText, title, calendarName, attendance.label].compactMap { $0 }.joined(separator: "、")
     }
 }
 

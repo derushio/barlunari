@@ -246,26 +246,34 @@ private struct AllDayItemRow: View {
 
     var body: some View {
         let roles = item.color.paletteRoles(colorScheme)
+        let isFaded = item.isPast || item.attendance == .declined
         Button(action: action) {
             HStack(spacing: 6) {
                 Text(item.title).font(.callout).lineLimit(1)
-                    .opacity(item.isPast ? CalendarPalette.pastTextOpacity : 1)
+                    .strikethrough(item.attendance == .declined)
+                    .opacity(isFaded ? CalendarPalette.pastTextOpacity : 1)
                 Spacer(minLength: 0)
+                if let label = item.attendance.label {
+                    Text(label).font(.caption2.weight(.medium)).foregroundStyle(.secondary)
+                }
             }
             .padding(.horizontal, 8)
             .frame(height: 22)
             .background(
                 RoundedRectangle(cornerRadius: 4).fill(isSelected ? roles.selectedTintColor : roles.tintColor)
-                    .opacity(item.isPast ? CalendarPalette.pastTextOpacity : 1)
+                    .opacity(isFaded ? CalendarPalette.pastTextOpacity : 1)
             )
             .overlay {
                 if isSelected {
                     RoundedRectangle(cornerRadius: 4).strokeBorder(roles.accentColor, lineWidth: 2)
+                } else if item.attendance == .needsResponse {
+                    RoundedRectangle(cornerRadius: 4)
+                        .strokeBorder(roles.accentColor, style: StrokeStyle(lineWidth: 1, dash: CalendarPalette.needsResponseDash))
                 }
             }
             .overlay(alignment: .leading) {
                 RoundedRectangle(cornerRadius: 1.5).fill(roles.accentColor)
-                    .opacity(item.isPast ? CalendarPalette.pastOpacity : 1)
+                    .opacity(item.attendance == .declined ? CalendarPalette.pastTextOpacity : item.isPast ? CalendarPalette.pastOpacity : 1)
                     .frame(width: 3).padding(.vertical, 1)
             }
             .contentShape(Rectangle())
@@ -357,35 +365,47 @@ private struct DayTimelineCanvas: View {
         let frame = frame(of: block)
         let roles = block.item.color.paletteRoles(context.environment.colorScheme)
         let shape = Path(roundedRect: frame, cornerRadius: 4)
+        let attendance = block.item.attendance
+        let isDeclined = attendance == .declined
         let isPast = block.item.isPast
+        // 辞退した予定は、過去の予定と同じ透明度で薄くし、取り消し線で区別する。
+        let isFaded = isPast || isDeclined
         context.drawLayer { layer in
             layer.clip(to: shape)
             // 過去のブロックは、薄い背景と文字を薄くし、点と線は少しだけ薄くする。
             layer.drawLayer { background in
-                if isPast { background.opacity = CalendarPalette.pastTextOpacity }
+                if isFaded { background.opacity = CalendarPalette.pastTextOpacity }
                 background.fill(shape, with: .color(isSelected ? roles.selectedTintColor : roles.tintColor))
             }
             layer.drawLayer { edge in
-                if isPast { edge.opacity = CalendarPalette.pastOpacity }
+                if isFaded { edge.opacity = isDeclined ? CalendarPalette.pastTextOpacity : CalendarPalette.pastOpacity }
                 edge.fill(Path(CGRect(x: frame.minX, y: frame.minY, width: 3, height: frame.height)), with: .color(roles.accentColor))
             }
             // 詳細を出している予定は、予定の色の枠線（2pt）で強調する。ブロックの形で切るので、外側の半分は切れる。内側に 2pt 入れて描く。
             if isSelected { layer.stroke(Path(roundedRect: frame.insetBy(dx: 1, dy: 1), cornerRadius: 3), with: .color(roles.accentColor), lineWidth: 2) }
+            // 未回答の予定は、予定の色の点線で囲む。選択中の実線の枠を優先する。
+            if attendance == .needsResponse, !isSelected {
+                layer.stroke(
+                    Path(roundedRect: frame.insetBy(dx: 0.5, dy: 0.5), cornerRadius: 3.5), with: .color(roles.accentColor),
+                    style: StrokeStyle(lineWidth: 1, dash: CalendarPalette.needsResponseDash)
+                )
+            }
             let textRect = CGRect(x: frame.minX + 8, y: frame.minY + 1, width: max(0, frame.width - 13), height: max(0, frame.height - 2))
-            let time = Text(verbatim: block.item.timeText).font(.caption2.monospacedDigit()).foregroundStyle(Color.secondary)
+            var time = Text(verbatim: block.item.timeText).font(.caption2.monospacedDigit()).foregroundStyle(Color.secondary)
+            if let label = attendance.label { time = time + Text(verbatim: "  \(label)").font(.caption2.weight(.medium)).foregroundStyle(Color.secondary) }
             if frame.height >= 40 {
-                let title = layer.resolve(Text(verbatim: block.item.title).font(.callout.weight(.semibold)))
+                let title = layer.resolve(Text(verbatim: block.item.title).font(.callout.weight(.semibold)).strikethrough(isDeclined))
                 let lineHeight = layer.resolve(Text(verbatim: "あ").font(.callout.weight(.semibold))).measure(in: textRect.size).height
                 let titleSize = title.measure(in: CGSize(width: textRect.width, height: min(textRect.height, lineHeight * 2)))
                 layer.drawLayer { titleLayer in
-                    if isPast { titleLayer.opacity = CalendarPalette.pastTextOpacity }
+                    if isFaded { titleLayer.opacity = CalendarPalette.pastTextOpacity }
                     titleLayer.clip(to: Path(CGRect(origin: textRect.origin, size: CGSize(width: textRect.width, height: titleSize.height))))
                     titleLayer.draw(title, in: CGRect(origin: textRect.origin, size: CGSize(width: textRect.width, height: lineHeight * 2)))
                 }
                 layer.draw(layer.resolve(time), at: CGPoint(x: textRect.minX, y: textRect.minY + titleSize.height), anchor: .topLeading)
             } else {
-                let titleColor = Color.primary.opacity(isPast ? CalendarPalette.pastTextOpacity : 1)
-                let line = Text(verbatim: block.item.title).font(.caption.weight(.semibold)).foregroundStyle(titleColor) + Text(verbatim: "  ") + time
+                let titleColor = Color.primary.opacity(isFaded ? CalendarPalette.pastTextOpacity : 1)
+                let line = Text(verbatim: block.item.title).font(.caption.weight(.semibold)).foregroundStyle(titleColor).strikethrough(isDeclined) + Text(verbatim: "  ") + time
                 layer.draw(layer.resolve(line), at: textRect.origin, anchor: .topLeading)
             }
         }

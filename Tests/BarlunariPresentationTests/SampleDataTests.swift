@@ -20,7 +20,7 @@ import Testing
         let snapshot = try await makeUseCase().execute(range: range)
 
         #expect(snapshot.days.count == 7)
-        #expect(snapshot.days[0].events.map(\.title) == ["朝会", "デザインレビュー", "夕食"])
+        #expect(snapshot.days[0].events.map(\.title) == ["朝会", "デザインレビュー", "辞退した会議", "夕食"])
         #expect(snapshot.days[0].events.contains { $0.meetingURL != nil })
         // 3 日間の終日予定は 10/27 から 10/29 まで
         let offsite = snapshot.days.map { $0.events.contains { $0.title == "開発合宿" } }

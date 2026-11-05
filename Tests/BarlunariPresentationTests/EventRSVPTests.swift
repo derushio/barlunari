@@ -258,20 +258,33 @@ import Testing
 
     // MARK: - 辞退したあと
 
-    @Test func 辞退して一覧から除かれても詳細を出し続ける() async throws {
+    @Test func 辞退しても予定は日の欄に辞退として残り詳細を出し続ける() async throws {
         let harness = Harness()
         let viewModel = await openInvitation(harness)
         await viewModel.respond(.declined)
 
-        // 保存後の変更通知で読み直すと、辞退した予定は AgendaBuilder が一覧から除く。
+        // 保存後の変更通知で読み直すと、辞退した予定は辞退の表示で一覧に残る。
         await reload(harness, viewModel, returning: events(replacing: invitation, with: invitation.responded(with: .declined)))
 
-        #expect(viewModel.selectedDaySchedule.blocks.allSatisfy { $0.id != invitation.id })
+        let rows = viewModel.sections(from: SampleData.day(2026, 10, 28), count: 1)[0].rows
+        #expect(rows.first { $0.id == invitation.id }?.attendance == .declined)
         #expect(viewModel.detailEventID == invitation.id)
         let detail = try #require(viewModel.eventDetail)
         #expect(detail.title == "新機能の企画会議")
         #expect(detail.rsvp?.current == .declined)
         #expect(detail.attendanceText == "辞退")
+    }
+
+    @Test func 辞退した予定が読み直しの結果になくても詳細を出し続ける() async throws {
+        let harness = Harness()
+        let viewModel = await openInvitation(harness)
+        await viewModel.respond(.declined)
+
+        await reload(harness, viewModel, returning: SampleData.events.filter { $0.id != invitation.id })
+
+        #expect(viewModel.sections(from: SampleData.day(2026, 10, 28), count: 1)[0].rows.allSatisfy { $0.id != invitation.id })
+        #expect(viewModel.detailEventID == invitation.id)
+        #expect(viewModel.eventDetail?.rsvp?.current == .declined)
     }
 
     @Test func 辞退を承諾で取り消せる() async throws {
@@ -288,16 +301,17 @@ import Testing
         #expect(viewModel.eventDetail?.rsvp?.current == .accepted)
     }
 
-    @Test func 辞退したあと詳細を閉じたら詳細は戻らない() async throws {
+    @Test func 辞退したあと詳細を閉じても一覧に残り開き直せる() async throws {
         let harness = Harness()
         let viewModel = await openInvitation(harness)
         await viewModel.respond(.declined)
         await reload(harness, viewModel, returning: events(replacing: invitation, with: invitation.responded(with: .declined)))
 
         viewModel.closeDetail()
+        #expect(viewModel.eventDetail == nil)
         viewModel.showDetail(of: invitation.id)
 
-        #expect(viewModel.eventDetail == nil)
+        #expect(viewModel.eventDetail?.rsvp?.current == .declined)
     }
 
     @Test func 辞退以外で回答した予定が読み直しで消えたら一覧に戻る() async throws {

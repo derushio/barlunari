@@ -24,6 +24,7 @@ public struct MonthWeekLayout: Equatable, Sendable {
         public let title: String
         public let color: CalendarColor?
         public let isPast: Bool
+        public let attendance: ListedAttendance
     }
 
     /// 表示するときに残した予定と、列ごとの隠れた件数。
@@ -110,7 +111,8 @@ public struct MonthWeekLayout: Equatable, Sendable {
                 kind: pending.kind,
                 title: pending.event.title.isEmpty ? "(タイトルなし)" : pending.event.title,
                 color: color(pending.event),
-                isPast: pending.isPast
+                isPast: pending.isPast,
+                attendance: ListedAttendance(pending.event)
             )
         }
     }
