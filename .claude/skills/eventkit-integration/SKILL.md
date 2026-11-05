@@ -85,12 +85,27 @@ EventKit との連携はすべて `BarlunariInfrastructure` に閉じ込めま�
 - 重複の除去は、表示するカレンダーの絞り込みの後、辞退した予定の除外の前に行います
 - 重複の除去が実機で効いているかは、`Log.calendar` の記録を `log` コマンドで確かめます
 
+## 出欠の回答
+
+- 詳細の「承諾」「未定」「辞退」は、`RespondToEventUseCase` が `EventResponder` を通して `EventKitCalendarStore.respond(to:with:)` を呼び、自分の出欠を書き込みます。回答の値と、回答できるかの判定（`CalendarEvent.canRespond`）は Domain の `AttendanceResponse` と `CalendarEvent` が持ち、出欠が `notApplicable` の予定と、自分が主催者の予定は回答できません
+- 予定は `CalendarEvent.Identity` で特定します。`EventID` を `eventIdentifier` と開始日時の秒に分け（`EventKitEventLocator`）、アカウントとカレンダーが一致するカレンダーだけを対象に、その回の開始日時を含む範囲を predicate で取得して、識別子と開始日時が一致する `EKEvent` を探します。ID だけでは同一視しません
+- `EKParticipant.participantStatus` は公開 API では読み取り専用です。`attendees` が返す実際のインスタンスは非公開のサブクラスで、`setParticipantStatus:` を持ちます。書き込む前に、自分の参加者が `responds(to: Selector(("setParticipantStatus:")))` を満たすか確かめ、満たさなければ書かずに `EventResponseError.unsupported` を投げます。満たすときだけ `setValue(_:forKey: "participantStatus")` で書き、読み戻して一致しなければ `unsupported` にします。KVC は未知のキーで `NSUnknownKeyException` により異常終了するため、確かめずに書きません
+- 保存は `store.save(event, span: .thisEvent)` で、表示している回だけを変えます。繰り返しの予定の他の回は変えません
+- 繰り返しの予定でまだ切り離されていない回（`hasRecurrenceRules && !isDetached`）は、アラームがあると保存が Access Denied で失敗します。アラームを外して保存し、`EKAlarm(relativeOffset:)` で付け直してもう一度保存します。付け直しの保存に失敗しても、回答は保存済みなので回答の失敗にはせず、`Log.calendar` に記録します
+- 保存に失敗したら、`event.refresh()` で未保存の変更を捨て、`EventResponseError.saveFailed` を投げます。`Log.calendar` には、エラーの domain と code だけを記録します。予定のタイトル、場所、メモ、URL、参加者は記録しません
+- 回答の成功後の一覧の更新は、`EKEventStoreChanged` による既存の読み直しに任せます。回答のための読み直しは作りません
+- 失敗したら、詳細にエラーの文と「カレンダーで開く」ボタンを出します。ボタンは `OpenEventInCalendarAppUseCase` から `CalendarAppOpener` を通り、`EventKitCalendarAppOpener` が `EventKitCalendarStore.calendarAppURL(for:)` で求めた URL を `URLOpener`（`NSWorkspace`）で開きます
+- URL は `CalendarAppURL` が組み立てます。通常の予定は `ical://ekevent/<calendarItemIdentifier を urlPathAllowed でパーセントエンコード>?method=show&options=more` です。繰り返しの予定（`hasRecurrenceRules`）は `ical://ekevent/<日付>/<id>?method=show&options=more` で、日付は書式 `yyyyMMdd'T'HHmmss'Z'` の回の開始日時です。時刻付きの予定は UTC で、終日の予定はアプリの暦のタイムゾーンで書式化します
+- 辞退した予定は、読み直すと `AgendaBuilder` が一覧から除きます。詳細を開いたまま辞退しても詳細を閉じないよう、`CalendarPopoverViewModel` が回答した直後の予定を `respondedEvent` に持ち、読み直しで予定が消えても詳細に出し続けます。読み直した予定の出欠が回答と同じになったら一覧の予定に任せ、辞退以外の回答で予定が消えたら削除されたとみなして詳細を閉じます。詳細を閉じるか別の予定を開くと捨てます
+- Google Calendar API と OAuth は使いません。アプリは認証情報を持たないためです
+
 ## テスト
 
 - `EventKitMapper` は `EventKitEventValue` などの値を作って確かめます。`@testable import BarlunariInfrastructure` で内部の型を使います。`EKEventStore` に触れるテストは書きません。許可のダイアログを出すためです
 - 終日予定の終了日、複数日の終日予定、終了が開始より前の予定、出欠の対応表、会議の URL の探す順、会議サービスでない URL を飛ばす場合、メモの URL の末尾の句読点を、分岐ごとにテストします
 - メモは、ブロックの除去（複数、対になる区切り線がない場合を含む）、空行のまとめ、空のメモを `nil` にする場合を、参加者は、`mailto:` 以外の URL、名前もメールアドレスもない参加者、主催者のまとめ方（メールアドレスの大文字小文字、名前でのまとめ、出欠の引き継ぎ）を、分岐ごとにテストします
 - 重複の除去は `AgendaBuilder` のテストで、SharedKey が同じ予定、UID を持たない予定、先のアカウントのカレンダーを非表示にした場合を確かめます
+- 出欠の回答は、`EventKitEventLocator` と `CalendarAppURL` を値で確かめます（繰り返しの有無、終日、パーセントエンコード、ID の分解）。回答のユースケースと ViewModel は `FakeEventResponder` と `FakeCalendarAppOpener` で確かめます。実際の書き込みはテストしません
 - 許可の状態とカレンダーの有無による案内は、`FakeCalendarAccessAuthorizer` と `InMemoryCalendarRepository` で再現します
 
 ## やってはいけないこと
