@@ -71,6 +71,26 @@ public struct CalendarEvent: Sendable, Hashable, Identifiable {
         self.iCalendarUID = trimmedUID.flatMap { $0.isEmpty ? nil : $0 }
     }
 
+    /// 自分が主催者の予定か。主催者は招待に回答しない。
+    public var isOrganizedByCurrentUser: Bool {
+        participants.contains { $0.isOrganizer && $0.isCurrentUser }
+    }
+
+    /// 自分が出欠を回答できる予定か。出欠の概念がない予定（`notApplicable`）と、自分が主催者の予定は回答できない。
+    public var canRespond: Bool {
+        attendance != .notApplicable && !isOrganizedByCurrentUser
+    }
+
+    /// 自分の出欠を `response` にした予定。参加者の中の自分の出欠も同じ値にする。同一性は変わらない。
+    public func responded(with response: AttendanceResponse) -> CalendarEvent {
+        CalendarEvent(
+            accountID: accountID, id: eventID, calendarID: calendarID, title: title, schedule: schedule,
+            location: location, meetingURL: meetingURL, detailURL: detailURL, notes: notes,
+            participants: participants.map { $0.isCurrentUser ? $0.with(attendance: response.attendance) : $0 },
+            attendance: response.attendance, iCalendarUID: iCalendarUID
+        )
+    }
+
     public static func == (lhs: CalendarEvent, rhs: CalendarEvent) -> Bool { lhs.id == rhs.id }
     public func hash(into hasher: inout Hasher) { hasher.combine(id) }
 }

@@ -27,6 +27,19 @@ public struct EventParticipant: Sendable, Hashable {
         self.isCurrentUser = isCurrentUser
     }
 
+    private init(copying other: EventParticipant, attendance: AttendanceStatus) {
+        name = other.name
+        emailAddress = other.emailAddress
+        self.attendance = attendance
+        isOrganizer = other.isOrganizer
+        isCurrentUser = other.isCurrentUser
+    }
+
+    /// 出欠だけを変えた参加者。名前とメールアドレスは検証済みの値を引き継ぐ。
+    public func with(attendance: AttendanceStatus) -> EventParticipant {
+        EventParticipant(copying: self, attendance: attendance)
+    }
+
     /// 名前、なければメールアドレス。
     public var displayName: String {
         // 不変条件により、どちらかは必ず持つ。
