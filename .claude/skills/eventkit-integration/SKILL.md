@@ -91,7 +91,8 @@ EventKit との連携はすべて `BarlunariInfrastructure` に閉じ込めま�
 - 予定は `CalendarEvent.Identity` で特定します。`EventID` を `eventIdentifier` と開始日時の秒に分け（`EventKitEventLocator`）、アカウントとカレンダーが一致するカレンダーだけを対象に、その回の開始日時を含む範囲を predicate で取得して、識別子と開始日時が一致する `EKEvent` を探します。ID だけでは同一視しません
 - `EKParticipant.participantStatus` は公開 API では読み取り専用です。`attendees` が返す実際のインスタンスは非公開のサブクラスで、`setParticipantStatus:` を持ちます。書き込む前に、自分の参加者が `responds(to: Selector(("setParticipantStatus:")))` を満たすか確かめ、満たさなければ書かずに `EventResponseError.unsupported` を投げます。満たすときだけ `setValue(_:forKey: "participantStatus")` で書き、読み戻して一致しなければ `unsupported` にします。KVC は未知のキーで `NSUnknownKeyException` により異常終了するため、確かめずに書きません
 - 保存は `store.save(event, span: .thisEvent)` で、表示している回だけを変えます。繰り返しの予定の他の回は変えません
-- 繰り返しの予定でまだ切り離されていない回（`hasRecurrenceRules && !isDetached`）は、アラームがあると保存が Access Denied で失敗します。アラームを外して保存し、相対時刻のアラームは `EKAlarm(relativeOffset:)` で作り直し、絶対時刻のアラームは同じものを付け直して、もう一度保存します。付け直しの保存に失敗しても、回答は保存済みなので回答の失敗にはせず、`Log.calendar` に記録します
+- 繰り返しの予定でまだ切り離されていない回（`hasRecurrenceRules && !isDetached`）は、アラームがあると保存が Access Denied で失敗します。外す前に各アラームを `copy() as? EKAlarm` で複製して退避し、アラームを外して保存したあと、複製を `addAlarm` で付け直してもう一度保存します。複製は `proximity`、`structuredLocation`、`soundName` などの設定も保つため、`EKAlarm(relativeOffset:)` で作り直しません。複製できないアラームが 1 つでもあれば、アラームを外さずに保存を試みます
+- 回答の戻り値は `EventResponseOutcome` です。付け直しの保存に失敗したら、回答は保存済みなので失敗にはせず `.savedWithoutAlarms` を返し、`Log.calendar` に記録します。それ以外の成功は `.saved` です。ViewModel は `.savedWithoutAlarms` のとき、出欠を新しい値にしたうえで、詳細に「通知を付け直せませんでした」という案内と「カレンダーで開く」ボタンを出します
 - 保存に失敗したら、`event.refresh()` で未保存の変更を捨て、`EventResponseError.saveFailed` を投げます。`Log.calendar` には、エラーの domain と code だけを記録します。予定のタイトル、場所、メモ、URL、参加者は記録しません
 - 回答の成功後の一覧の更新は、`EKEventStoreChanged` による既存の読み直しに任せます。回答のための読み直しは作りません
 - 失敗したら、詳細にエラーの文と「カレンダーで開く」ボタンを出します。ボタンは `OpenEventInCalendarAppUseCase` から `CalendarAppOpener` を通り、`EventKitCalendarAppOpener` が `EventKitCalendarStore.calendarAppURL(for:)` で求めた URL を `URLOpener`（`NSWorkspace`）で開きます

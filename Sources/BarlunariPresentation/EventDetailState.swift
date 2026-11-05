@@ -38,7 +38,7 @@ public struct EventRSVPState: Equatable, Sendable {
     public let current: AttendanceStatus
     /// 保存中の回答。`nil` でなければ、ボタンを無効にする。
     public let responding: AttendanceResponse?
-    /// 回答に失敗した理由。`nil` でなければ、「カレンダーで開く」ボタンを出す。
+    /// 回答に失敗した理由か、通知を付け直せなかった案内。`nil` でなければ、「カレンダーで開く」ボタンを出す。
     public let errorMessage: String?
 
     public var isResponding: Bool { responding != nil }

@@ -9,9 +9,10 @@ public struct RespondToEventUseCase: Sendable {
     }
 
     /// 回答できない予定では、`EventResponseError.notRespondable` を投げ、何も書き込まない。
-    public func execute(event: CalendarEvent, response: AttendanceResponse) async throws {
+    /// - Returns: 保存の結果。通知を付け直せなかったときは `.savedWithoutAlarms`。
+    public func execute(event: CalendarEvent, response: AttendanceResponse) async throws -> EventResponseOutcome {
         guard event.canRespond else { throw EventResponseError.notRespondable }
-        try await responder.respond(to: event.id, with: response)
+        return try await responder.respond(to: event.id, with: response)
     }
 }
 

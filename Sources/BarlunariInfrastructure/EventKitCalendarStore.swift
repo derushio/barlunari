@@ -118,7 +118,9 @@ public actor EventKitCalendarStore: CalendarRepository, CalendarEventRepository,
     ///
     /// `EKParticipant.participantStatus` は公開 API では読み取り専用である。`attendees` が返す実際のインスタンスは
     /// 非公開のサブクラスで、`setParticipantStatus:` に応答するときだけ KVC で書く。応答しなければ書かずに `unsupported` を投げる。
-    public func respond(to identity: CalendarEvent.Identity, with response: AttendanceResponse) async throws {
+    public func respond(
+        to identity: CalendarEvent.Identity, with response: AttendanceResponse
+    ) async throws -> EventResponseOutcome {
         try Self.requireFullAccess()
         guard let event = findEvent(identity) else { throw EventResponseError.eventNotFound }
         guard let me = event.attendees?.first(where: \.isCurrentUser), event.organizer?.isCurrentUser != true else {
@@ -131,9 +133,11 @@ public actor EventKitCalendarStore: CalendarRepository, CalendarEventRepository,
         let status = Self.participantStatus(of: response)
 
         // 繰り返しの予定でまだ切り離されていない回は、アラームがあると保存が Access Denied で失敗する。
-        // アラームを外して保存し、同じ相対時刻のアラームを付け直してもう一度保存する。
+        // アラームを外して保存し、外す前に複製しておいたアラームを付け直してもう一度保存する。
+        // 複製は `proximity`、`structuredLocation`、`soundName` などの設定も保つ。複製できないアラームがあれば、外さずに保存を試みる。
         let alarms = event.alarms ?? []
-        let removesAlarms = event.hasRecurrenceRules && !event.isDetached && !alarms.isEmpty
+        let copies = alarms.compactMap { $0.copy() as? EKAlarm }
+        let removesAlarms = event.hasRecurrenceRules && !event.isDetached && !alarms.isEmpty && copies.count == alarms.count
         do {
             if removesAlarms { event.alarms = nil }
             me.setValue(status.rawValue, forKey: "participantStatus")
@@ -152,23 +156,23 @@ public actor EventKitCalendarStore: CalendarRepository, CalendarEventRepository,
             )
             throw EventResponseError.saveFailed
         }
-        if removesAlarms { restoreAlarms(alarms, on: event) }
+        guard removesAlarms else { return .saved }
+        return restoreAlarms(copies, on: event)
     }
 
-    /// 外したアラームを付け直して保存する。回答は保存済みなので、失敗しても回答の失敗にはしない。
-    private func restoreAlarms(_ alarms: [EKAlarm], on event: EKEvent) {
-        for alarm in alarms {
-            // 絶対時刻のアラームは繰り返しの予定の回ごとの相対時刻に戻せないため、相対時刻のものだけ付け直す。
-            event.addAlarm(alarm.absoluteDate == nil ? EKAlarm(relativeOffset: alarm.relativeOffset) : alarm)
-        }
+    /// 外したアラームの複製を付け直して保存する。回答は保存済みなので、失敗しても回答の失敗にはせず、`.savedWithoutAlarms` を返す。
+    private func restoreAlarms(_ alarms: [EKAlarm], on event: EKEvent) -> EventResponseOutcome {
+        alarms.forEach(event.addAlarm)
         do {
             try store.save(event, span: .thisEvent)
+            return .saved
         } catch {
             event.refresh()
             let nsError = error as NSError
             Log.calendar.error(
                 "アラームを付け直せなかった domain=\(nsError.domain, privacy: .public) code=\(nsError.code, privacy: .public)"
             )
+            return .savedWithoutAlarms
         }
     }
 

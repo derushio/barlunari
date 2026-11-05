@@ -216,6 +216,46 @@ import Testing
         #expect(viewModel.eventDetail?.rsvp?.errorMessage == nil)
     }
 
+    // MARK: - 通知を付け直せなかったとき
+
+    @Test func 通知を付け直せなかったら出欠は新しい値にして案内とカレンダーで開くボタンを出す() async throws {
+        let harness = Harness(responder: FakeEventResponder(outcome: .savedWithoutAlarms))
+        let viewModel = await openInvitation(harness)
+
+        await viewModel.respond(.accepted)
+
+        let rsvp = try #require(viewModel.eventDetail?.rsvp)
+        #expect(rsvp.current == .accepted)
+        #expect(rsvp.errorMessage == "出欠は回答しましたが、この回の通知を付け直せませんでした。カレンダーで通知を確認してください。")
+        #expect(!rsvp.isResponding)
+        #expect(harness.responder.responses == [.init(event: invitation.id, response: .accepted)])
+
+        await viewModel.openDetailInCalendarApp()
+        #expect(harness.calendarAppOpener.openedEvents == [invitation.id])
+    }
+
+    @Test func 通知を付け直せた回答では案内を出さない() async throws {
+        let harness = Harness(responder: FakeEventResponder(outcome: .saved))
+        let viewModel = await openInvitation(harness)
+
+        await viewModel.respond(.accepted)
+
+        #expect(viewModel.eventDetail?.rsvp?.errorMessage == nil)
+        #expect(viewModel.rsvpPhase == .idle)
+    }
+
+    @Test func 通知の案内は詳細を閉じると消える() async throws {
+        let harness = Harness(responder: FakeEventResponder(outcome: .savedWithoutAlarms))
+        let viewModel = await openInvitation(harness)
+        await viewModel.respond(.accepted)
+
+        viewModel.closeDetail()
+        viewModel.showDetail(of: invitation.id)
+
+        #expect(viewModel.rsvpPhase == .idle)
+        #expect(viewModel.eventDetail?.rsvp?.errorMessage == nil)
+    }
+
     // MARK: - 辞退したあと
 
     @Test func 辞退して一覧から除かれても詳細を出し続ける() async throws {

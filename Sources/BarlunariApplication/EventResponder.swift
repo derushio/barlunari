@@ -12,11 +12,20 @@ public enum EventResponseError: Error, Equatable, Sendable {
     case saveFailed
 }
 
+/// 出欠の回答の保存が成功したときの結果。失敗は `EventResponseError` で投げる。
+public enum EventResponseOutcome: Equatable, Sendable {
+    /// 出欠を保存した。
+    case saved
+    /// 出欠は保存したが、保存のために外したこの回の通知（アラーム）を付け直せなかった。通知が消えたままになっている。
+    case savedWithoutAlarms
+}
+
 /// 自分の出欠を変更して保存する。
 public protocol EventResponder: Sendable {
     /// 表示している回だけの出欠を `response` にする。繰り返しの予定の他の回は変えない。
+    /// - Returns: 出欠を保存できたときの結果。通知を付け直せなかったときは `.savedWithoutAlarms`。
     /// - Throws: `CalendarAccessError` か `EventResponseError`。
-    func respond(to event: CalendarEvent.Identity, with response: AttendanceResponse) async throws
+    func respond(to event: CalendarEvent.Identity, with response: AttendanceResponse) async throws -> EventResponseOutcome
 }
 
 /// 予定を標準のカレンダーアプリで開く。出欠の回答に失敗したときの逃げ道として使う。

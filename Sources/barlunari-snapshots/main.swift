@@ -50,9 +50,10 @@ struct Fixture {
         eventError: (any Error)? = nil,
         events sampleEvents: [CalendarEvent] = SampleData.events,
         displayMode: CalendarDisplayMode = .compact,
-        rsvpFailure: (any Error)? = nil
+        rsvpFailure: (any Error)? = nil,
+        rsvpOutcome: EventResponseOutcome = .saved
     ) {
-        responder = FakeEventResponder(failure: rsvpFailure)
+        responder = FakeEventResponder(failure: rsvpFailure, outcome: rsvpOutcome)
         let dateProvider = FixedDateProvider()
         let authorizer = FakeCalendarAccessAuthorizer(status: status)
         let calendarRepository = InMemoryCalendarRepository(accounts: accounts, calendars: calendars)
@@ -269,6 +270,15 @@ func runSnapshots(outputDirectory: URL) async throws {
         fixture.popover.showDetail(of: invitationID)
         await fixture.popover.respond(.accepted)
         try await render(popoverView(fixture), appearance: appearance, to: output(name))
+    }
+
+    do {
+        let fixture = Fixture(rsvpOutcome: .savedWithoutAlarms)
+        fixture.popover.reload()
+        await fixture.popover.waitForLoad()
+        fixture.popover.showDetail(of: invitationID)
+        await fixture.popover.respond(.accepted)
+        try await render(popoverView(fixture), appearance: .aqua, to: output("popover-detail-rsvp-alarms-light"))
     }
 
     // ポップオーバー（月曜始まりの別の日を選択した状態）

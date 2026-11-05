@@ -13,16 +13,27 @@ import Testing
         let responder = FakeEventResponder()
         let event = invited()
 
-        try await RespondToEventUseCase(responder: responder).execute(event: event, response: .tentative)
+        let outcome = try await RespondToEventUseCase(responder: responder).execute(event: event, response: .tentative)
 
         #expect(responder.responses == [.init(event: event.id, response: .tentative)])
+        #expect(outcome == .saved)
+    }
+
+    @Test func 通知を付け直せなかった結果をそのまま返す() async throws {
+        let responder = FakeEventResponder(outcome: .savedWithoutAlarms)
+        let event = invited()
+
+        let outcome = try await RespondToEventUseCase(responder: responder).execute(event: event, response: .declined)
+
+        #expect(outcome == .savedWithoutAlarms)
+        #expect(responder.responses == [.init(event: event.id, response: .declined)])
     }
 
     @Test func 出欠の概念がない予定は書き込まずに失敗する() async throws {
         let responder = FakeEventResponder()
 
         await #expect(throws: EventResponseError.notRespondable) {
-            try await RespondToEventUseCase(responder: responder).execute(
+            _ = try await RespondToEventUseCase(responder: responder).execute(
                 event: invited(attendance: .notApplicable), response: .accepted
             )
         }
@@ -41,7 +52,7 @@ import Testing
         let responder = FakeEventResponder()
 
         await #expect(throws: EventResponseError.notRespondable) {
-            try await RespondToEventUseCase(responder: responder).execute(event: event, response: .declined)
+            _ = try await RespondToEventUseCase(responder: responder).execute(event: event, response: .declined)
         }
         #expect(responder.attemptCount == 0)
     }
@@ -50,7 +61,7 @@ import Testing
         let responder = FakeEventResponder(failure: EventResponseError.saveFailed)
 
         await #expect(throws: EventResponseError.saveFailed) {
-            try await RespondToEventUseCase(responder: responder).execute(event: invited(), response: .accepted)
+            _ = try await RespondToEventUseCase(responder: responder).execute(event: invited(), response: .accepted)
         }
         #expect(responder.responses.isEmpty)
     }

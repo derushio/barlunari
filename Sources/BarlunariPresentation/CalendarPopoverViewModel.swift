@@ -111,7 +111,12 @@ public final class CalendarPopoverViewModel {
         case responding(AttendanceResponse)
         /// 失敗した理由。利用者に見せる文。
         case failed(String)
+        /// 出欠は保存したが、この回の通知を付け直せなかった。出欠は新しい値で、通知を確かめる案内を出す。
+        case savedWithoutAlarms
     }
+
+    /// 出欠は保存したが通知を付け直せなかったときに、詳細に出す文。
+    static let alarmsLostMessage = "出欠は回答しましたが、この回の通知を付け直せませんでした。カレンダーで通知を確認してください。"
 
     public private(set) var rsvpPhase: RSVPPhase = .idle
     /// 回答のたびと、回答の状態を戻すたびに進める通し番号。これと違う番号で始めた回答の完了は、状態を更新しない。
@@ -742,11 +747,11 @@ public final class CalendarPopoverViewModel {
         let sequence = rsvpSequence
         rsvpPhase = .responding(response)
         do {
-            try await respondToEvent.execute(event: event, response: response)
+            let outcome = try await respondToEvent.execute(event: event, response: response)
             guard rsvpSequence == sequence, detailEventID == id else { return }
             respondedEvent = event.responded(with: response)
             respondedEventGeneration = loadGeneration
-            rsvpPhase = .idle
+            rsvpPhase = outcome == .savedWithoutAlarms ? .savedWithoutAlarms : .idle
         } catch {
             guard rsvpSequence == sequence, detailEventID == id else { return }
             rsvpPhase = .failed(UserFacingMessage.text(for: error))
@@ -1128,6 +1133,7 @@ public final class CalendarPopoverViewModel {
         case .idle: EventRSVPState(current: event.attendance, responding: nil, errorMessage: nil)
         case .responding(let response): EventRSVPState(current: event.attendance, responding: response, errorMessage: nil)
         case .failed(let message): EventRSVPState(current: event.attendance, responding: nil, errorMessage: message)
+        case .savedWithoutAlarms: EventRSVPState(current: event.attendance, responding: nil, errorMessage: Self.alarmsLostMessage)
         }
     }
 

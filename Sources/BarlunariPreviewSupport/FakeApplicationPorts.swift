@@ -121,11 +121,13 @@ public final class FakeCalendarSourceRefresher: CalendarSourceRefresher {
 /// 回答を記録するだけの `EventResponder`。
 ///
 /// `setFailure(_:)` で、以後の回答をそのエラーで失敗させる。`nil` を渡すと成功に戻る。
+/// `setOutcome(_:)` で、以後の成功した回答の結果（`.saved` か `.savedWithoutAlarms`）を指定する。
 /// `onRespond` を渡すと、成功した回答のたびに実行する。予定のリポジトリに回答を反映する動きの再現に使う。
 public final class FakeEventResponder: EventResponder {
     private struct State {
         var responses: [Recorded] = []
         var failure: (any Error)?
+        var outcome: EventResponseOutcome = .saved
         var attempts = 0
         var isHeld = false
         var pending: [CheckedContinuation<Void, Never>] = []
@@ -146,10 +148,18 @@ public final class FakeEventResponder: EventResponder {
 
     public init(
         failure: (any Error)? = nil,
+        outcome: EventResponseOutcome = .saved,
         onRespond: (@Sendable (CalendarEvent.Identity, AttendanceResponse) -> Void)? = nil
     ) {
         self.onRespond = onRespond
-        state.withLock { $0.failure = failure }
+        state.withLock {
+            $0.failure = failure
+            $0.outcome = outcome
+        }
+    }
+
+    public func setOutcome(_ outcome: EventResponseOutcome) {
+        state.withLock { $0.outcome = outcome }
     }
 
     public func setFailure(_ failure: (any Error)?) {
@@ -185,11 +195,11 @@ public final class FakeEventResponder: EventResponder {
     /// 回答を受け付けた回数。失敗した回答も数える。
     public var attemptCount: Int { state.withLock { $0.attempts } }
 
-    public func respond(to event: CalendarEvent.Identity, with response: AttendanceResponse) async throws {
-        let failure = state.withLock { state -> (any Error)? in
+    public func respond(to event: CalendarEvent.Identity, with response: AttendanceResponse) async throws -> EventResponseOutcome {
+        let (failure, outcome) = state.withLock { state -> ((any Error)?, EventResponseOutcome) in
             state.attempts += 1
             if state.failure == nil { state.responses.append(Recorded(event: event, response: response)) }
-            return state.failure
+            return (state.failure, state.outcome)
         }
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
             let isHeld = state.withLock { state -> Bool in
@@ -200,6 +210,7 @@ public final class FakeEventResponder: EventResponder {
         }
         if let failure { throw failure }
         onRespond?(event, response)
+        return outcome
     }
 }
 
