@@ -36,7 +36,7 @@ import Testing
     static func layout(_ events: [CalendarEvent], now: Date = SampleData.date(2026, 10, 21, 12, 0)) -> MonthWeekLayout {
         let range = try! DayRange(start: day(-14), dayCount: 35, calendar: calendar)
         let agendas = AgendaBuilder().build(
-            events: events, visibleCalendars: [owner.id], accountOrder: [account, owner.accountID],
+            events: events, visibleCalendars: [owner.id], accountOrder: [account, owner.accountID], includesDeclined: true,
             range: range, calendar: calendar
         )
         let eventsByDay = Dictionary(uniqueKeysWithValues: agendas.map { ($0.day, $0.events) })

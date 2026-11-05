@@ -20,6 +20,8 @@ public final class SettingsViewModel {
     // 一般
     public private(set) var launchAtLogin = false
     public private(set) var launchAtLoginError: String?
+    /// 辞退した予定を、ポップオーバーの一覧・日の欄・月のマス目に出すか。
+    public private(set) var showDeclinedEvents = ShowDeclinedEventsDefault.value
 
     // カレンダー
     public private(set) var calendars: [CalendarListItem] = []
@@ -36,6 +38,8 @@ public final class SettingsViewModel {
 
     private let getLaunchAtLogin: GetLaunchAtLoginUseCase
     private let setLaunchAtLoginUseCase: SetLaunchAtLoginUseCase
+    private let loadShowDeclinedEvents: LoadShowDeclinedEventsUseCase
+    private let saveShowDeclinedEvents: SaveShowDeclinedEventsUseCase
     private let listCalendars: ListCalendarsUseCase
     private let setCalendarVisibility: SetCalendarVisibilityUseCase
     private let requestCalendarAccess: RequestCalendarAccessUseCase
@@ -45,6 +49,8 @@ public final class SettingsViewModel {
     public init(
         getLaunchAtLogin: GetLaunchAtLoginUseCase,
         setLaunchAtLogin: SetLaunchAtLoginUseCase,
+        loadShowDeclinedEvents: LoadShowDeclinedEventsUseCase,
+        saveShowDeclinedEvents: SaveShowDeclinedEventsUseCase,
         listCalendars: ListCalendarsUseCase,
         setCalendarVisibility: SetCalendarVisibilityUseCase,
         requestCalendarAccess: RequestCalendarAccessUseCase,
@@ -54,6 +60,8 @@ public final class SettingsViewModel {
     ) {
         self.getLaunchAtLogin = getLaunchAtLogin
         self.setLaunchAtLoginUseCase = setLaunchAtLogin
+        self.loadShowDeclinedEvents = loadShowDeclinedEvents
+        self.saveShowDeclinedEvents = saveShowDeclinedEvents
         self.listCalendars = listCalendars
         self.setCalendarVisibility = setCalendarVisibility
         self.requestCalendarAccess = requestCalendarAccess
@@ -80,6 +88,7 @@ public final class SettingsViewModel {
     /// 設定画面を開いたときに呼ぶ。すべてのタブの内容を最新にする。
     public func load() async {
         launchAtLogin = await getLaunchAtLogin.execute()
+        showDeclinedEvents = loadShowDeclinedEvents.execute()
         observedRevision = changeNotifier.revision
         await reloadCalendars()
     }
@@ -114,6 +123,14 @@ public final class SettingsViewModel {
             launchAtLogin = previous
             launchAtLoginError = "ログイン時の起動を変更できませんでした。"
         }
+    }
+
+    /// 保存して変更を通知する。開いているポップオーバーは、通知を受けて予定を読み直す。
+    public func setShowDeclinedEvents(_ show: Bool) {
+        guard show != showDeclinedEvents else { return }
+        showDeclinedEvents = show
+        saveShowDeclinedEvents.execute(show)
+        notifyChange()
     }
 
     // MARK: - カレンダー

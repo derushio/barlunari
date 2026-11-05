@@ -88,6 +88,8 @@ struct LaunchFailure: Error {}
         let failing = SettingsViewModel(
             getLaunchAtLogin: GetLaunchAtLoginUseCase(service: harness.launchAtLogin),
             setLaunchAtLogin: SetLaunchAtLoginUseCase(service: harness.launchAtLogin),
+            loadShowDeclinedEvents: LoadShowDeclinedEventsUseCase(store: harness.showDeclinedEventsStore),
+            saveShowDeclinedEvents: SaveShowDeclinedEventsUseCase(store: harness.showDeclinedEventsStore),
             listCalendars: ListCalendarsUseCase(
                 authorizer: harness.authorizer,
                 calendarRepository: InMemoryCalendarRepository(error: CocoaError(.fileReadUnknown)),
@@ -206,5 +208,56 @@ struct LaunchFailure: Error {}
         let sections = settings.calendarSections
         #expect(sections[0].items.map(\.isVisible) == [true, false])
         #expect(sections[1].items.map(\.isVisible) == [true, true])
+    }
+
+    // MARK: - 辞退した予定を表示
+
+    @Test func 辞退した予定の表示は保存がなければオンで読み込む() async {
+        let harness = Harness()
+        await harness.settings.load()
+        #expect(harness.settings.showDeclinedEvents)
+    }
+
+    @Test func 保存したオフの値を設定画面を開き直したときも表示する() async {
+        let harness = Harness(showDeclinedEvents: false)
+        await harness.settings.load()
+        #expect(!harness.settings.showDeclinedEvents)
+    }
+
+    @Test func 辞退した予定の表示を変えると保存して変更を通知する() async {
+        let harness = Harness()
+        let settings = harness.settings
+        await settings.load()
+        let before = harness.popover.changeRevision
+
+        settings.setShowDeclinedEvents(false)
+
+        #expect(!settings.showDeclinedEvents)
+        #expect(harness.showDeclinedEventsStore.load() == false)
+        #expect(harness.showDeclinedEventsStore.savedValues == [false])
+        #expect(harness.popover.changeRevision == before + 1)
+    }
+
+    @Test func 同じ値に変えても保存も通知もしない() async {
+        let harness = Harness()
+        await harness.settings.load()
+        let before = harness.popover.changeRevision
+
+        harness.settings.setShowDeclinedEvents(true)
+
+        #expect(harness.showDeclinedEventsStore.savedValues.isEmpty)
+        #expect(harness.popover.changeRevision == before)
+    }
+
+    @Test func 自分で変えた辞退した予定の表示ではカレンダーの一覧を読み直さない() async {
+        let harness = Harness()
+        let settings = harness.settings
+        await settings.load()
+        let fetched = await harness.calendarRepository.callCount
+
+        settings.setShowDeclinedEvents(false)
+        await settings.refreshIfChangedElsewhere()
+
+        #expect(await harness.calendarRepository.callCount == fetched)
     }
 }

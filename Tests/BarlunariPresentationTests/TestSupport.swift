@@ -101,6 +101,7 @@ struct Harness {
     let visibility: InMemoryCalendarVisibilityRepository
     let launchAtLogin: FakeLaunchAtLoginService
     let displayModeStore: InMemoryDisplayModeStore
+    let showDeclinedEventsStore: InMemoryShowDeclinedEventsStore
 
     init(
         status: CalendarAuthorizationStatus = .fullAccess,
@@ -114,12 +115,14 @@ struct Harness {
         hiddenCalendars: [UserCalendar] = [],
         dateProvider: MutableDateProvider = MutableDateProvider(),
         displayMode: CalendarDisplayMode? = nil,
+        showDeclinedEvents: Bool? = nil,
         responder: FakeEventResponder = FakeEventResponder(),
         calendarAppOpener: FakeCalendarAppOpener = FakeCalendarAppOpener()
     ) {
         self.responder = responder
         self.calendarAppOpener = calendarAppOpener
         displayModeStore = InMemoryDisplayModeStore(mode: displayMode)
+        showDeclinedEventsStore = InMemoryShowDeclinedEventsStore(value: showDeclinedEvents)
         eventRepository = ScriptedEventRepository(events: events, error: eventError)
         var hidden = CalendarVisibility()
         hiddenCalendars.forEach { hidden.hide($0.id) }
@@ -140,6 +143,7 @@ struct Harness {
                 calendarRepository: calendarRepository,
                 eventRepository: eventRepository,
                 visibilityRepository: visibility,
+                showDeclinedEventsStore: showDeclinedEventsStore,
                 dateProvider: dateProvider
             ),
             requestCalendarAccess: requestAccess,
@@ -162,6 +166,8 @@ struct Harness {
         settings = SettingsViewModel(
             getLaunchAtLogin: GetLaunchAtLoginUseCase(service: launchAtLogin),
             setLaunchAtLogin: SetLaunchAtLoginUseCase(service: launchAtLogin),
+            loadShowDeclinedEvents: LoadShowDeclinedEventsUseCase(store: showDeclinedEventsStore),
+            saveShowDeclinedEvents: SaveShowDeclinedEventsUseCase(store: showDeclinedEventsStore),
             listCalendars: ListCalendarsUseCase(
                 authorizer: authorizer, calendarRepository: calendarRepository, visibilityRepository: visibility
             ),

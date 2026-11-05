@@ -49,6 +49,15 @@ private struct GeneralSettingsTab: View {
                     Text(error).font(.caption).foregroundStyle(.red)
                 }
             }
+            Section {
+                Toggle("辞退した予定を表示", isOn: Binding(
+                    get: { viewModel.showDeclinedEvents },
+                    set: { viewModel.setShowDeclinedEvents($0) }
+                ))
+                Text("オフにすると、辞退した予定を予定の一覧、日の欄、月のマス目から除きます。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
         }
         .formStyle(.grouped)
     }

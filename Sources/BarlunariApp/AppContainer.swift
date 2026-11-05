@@ -18,6 +18,7 @@ final class AppContainer {
         let systemSettingsOpener = WorkspaceSystemSettingsOpener()
         let visibilityRepository = UserDefaultsCalendarVisibilityRepository()
         let displayModeStore = UserDefaultsDisplayModeStore()
+        let showDeclinedEventsStore = UserDefaultsShowDeclinedEventsStore()
         let launchAtLoginService = SMAppServiceLaunchAtLoginService()
 
         let requestCalendarAccess = RequestCalendarAccessUseCase(authorizer: calendarStore)
@@ -38,6 +39,7 @@ final class AppContainer {
                 calendarRepository: calendarStore,
                 eventRepository: calendarStore,
                 visibilityRepository: visibilityRepository,
+                showDeclinedEventsStore: showDeclinedEventsStore,
                 dateProvider: dateProvider
             ),
             requestCalendarAccess: requestCalendarAccess,
@@ -59,6 +61,8 @@ final class AppContainer {
         settingsViewModel = SettingsViewModel(
             getLaunchAtLogin: GetLaunchAtLoginUseCase(service: launchAtLoginService),
             setLaunchAtLogin: SetLaunchAtLoginUseCase(service: launchAtLoginService),
+            loadShowDeclinedEvents: LoadShowDeclinedEventsUseCase(store: showDeclinedEventsStore),
+            saveShowDeclinedEvents: SaveShowDeclinedEventsUseCase(store: showDeclinedEventsStore),
             listCalendars: listCalendars,
             setCalendarVisibility: setCalendarVisibility,
             requestCalendarAccess: requestCalendarAccess,

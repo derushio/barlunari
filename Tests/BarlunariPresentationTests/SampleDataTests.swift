@@ -11,6 +11,7 @@ import Testing
             calendarRepository: InMemoryCalendarRepository(),
             eventRepository: InMemoryCalendarEventRepository(),
             visibilityRepository: InMemoryCalendarVisibilityRepository(visibility: visibility),
+            showDeclinedEventsStore: InMemoryShowDeclinedEventsStore(),
             dateProvider: FixedDateProvider()
         )
     }
