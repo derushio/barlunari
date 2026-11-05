@@ -30,7 +30,7 @@ Barlunari は戦術的 DDD のレイヤードアーキテクチャで作りま�
 - ドメインサービス: 1 つのエンティティや値オブジェクトに属さない業務ルールです。状態を持たず、入力から結果を計算します。`AgendaBuilder` がこれに当たり、日ごとの予定を作る `build` と、日ごとの色を求める `colorsByDay` を持ちます。iCalendar の UID と日時が同じ予定を 1 件にする重複の除去も `build` が行います
 - リポジトリ: 集約やエンティティの取得と保存の抽象です。プロトコルは Domain に置き、実装は Infrastructure に置きます。`CalendarRepository`、`CalendarEventRepository`、`CalendarVisibilityRepository` があります。予定のリポジトリは `UserCalendar.Identity` の集合を受け取り、カレンダーのリポジトリはアカウントとカレンダーを返します。読んでから書き戻す更新は、`CalendarVisibilityRepository.update` のように、リポジトリが原子的に行います
 - ユースケース: 利用者の操作 1 つを表す `struct` で、`func execute(...) async throws` を持ちます。リポジトリとポートを組み合わせ、業務ルールそのものは持ちません。`LoadAgendaUseCase`、`ListCalendarsUseCase`、`RequestCalendarAccessUseCase` などがあります。許可の状態の確認は、ユースケースが行います
-- ポート: Application が必要とする外部サービスの抽象です。プロトコルは Application に置き、実装は Infrastructure に置きます。`CalendarAccessAuthorizer`、`SystemSettingsOpener`、`DateProvider`、`LaunchAtLoginService`、`URLOpener` があります。`EventKitValues.swift` の値のように、Infrastructure の内部だけで使う型は、Application のポートにしません
+- ポート: Application が必要とする外部サービスの抽象です。プロトコルは Application に置き、実装は Infrastructure に置きます。`CalendarAccessAuthorizer`、`SystemSettingsOpener`、`DateProvider`、`LaunchAtLoginService`、`URLOpener`、`DisplayModeStore`、`ShowDeclinedEventsStore` があります。`EventKitValues.swift` の値のように、Infrastructure の内部だけで使う型は、Application のポートにしません
 
 迷ったときの順序は次のとおりです。
 
