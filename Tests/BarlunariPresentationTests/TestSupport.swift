@@ -85,6 +85,8 @@ struct Harness {
     let popover: CalendarPopoverViewModel
     let settings: SettingsViewModel
     let opener = FakeURLOpener()
+    let responder: FakeEventResponder
+    let calendarAppOpener: FakeCalendarAppOpener
     let settingsOpener = FakeSystemSettingsOpener()
     let notifier: DataChangeNotifier
     /// 日付変更などの通知を、システムの通知と混ざらないよう専用の通知センターで流す。
@@ -111,8 +113,12 @@ struct Harness {
         launchAtLoginError: (any Error)? = nil,
         hiddenCalendars: [UserCalendar] = [],
         dateProvider: MutableDateProvider = MutableDateProvider(),
-        displayMode: CalendarDisplayMode? = nil
+        displayMode: CalendarDisplayMode? = nil,
+        responder: FakeEventResponder = FakeEventResponder(),
+        calendarAppOpener: FakeCalendarAppOpener = FakeCalendarAppOpener()
     ) {
+        self.responder = responder
+        self.calendarAppOpener = calendarAppOpener
         displayModeStore = InMemoryDisplayModeStore(mode: displayMode)
         eventRepository = ScriptedEventRepository(events: events, error: eventError)
         var hidden = CalendarVisibility()
@@ -139,6 +145,8 @@ struct Harness {
             requestCalendarAccess: requestAccess,
             openSystemSettings: openSystemSettings,
             refreshCalendarSources: RefreshCalendarSourcesUseCase(refresher: sourceRefresher),
+            respondToEvent: RespondToEventUseCase(responder: responder),
+            openEventInCalendarApp: OpenEventInCalendarAppUseCase(opener: calendarAppOpener),
             dateProvider: dateProvider,
             urlOpener: opener,
             changeNotifier: notifier,

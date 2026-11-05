@@ -1,8 +1,23 @@
 import SwiftUI
+import BarlunariDomain
 
 /// 予定一覧の領域と入れ替えて出す、予定の詳細。
 ///
 /// リンクと「参加」ボタンは環境の `openURL` で開く。`CalendarPopoverView` が `openURL` を ViewModel に向ける。
+/// 詳細の出欠の回答欄から呼ぶ操作。View に ViewModel を持たせず、押されたときの処理だけを渡す。
+struct EventDetailActions {
+    var respond: (AttendanceResponse) -> Void = { _ in }
+    var openInCalendar: () -> Void = {}
+
+    @MainActor
+    init(_ viewModel: CalendarPopoverViewModel) {
+        respond = { response in Task { await viewModel.respond(response) } }
+        openInCalendar = { Task { await viewModel.openDetailInCalendarApp() } }
+    }
+
+    init() {}
+}
+
 struct EventDetailView: View {
     /// 詳細の高さの上限。これを超えたらスクロールする。一覧に戻るボタンは含まない。
     static let maxHeight: CGFloat = 300
@@ -10,6 +25,7 @@ struct EventDetailView: View {
     let detail: EventDetailState
     @Environment(\.colorScheme) private var colorScheme
     let onBack: () -> Void
+    var actions = EventDetailActions()
     /// 内容の高さの上限。コンパクト表示は既定の `maxHeight`、月表示の右側のパネルは、パネルの高さに合わせて渡す。
     var contentMaxHeight: CGFloat = Self.maxHeight
     /// 戻るボタンの文。コンパクト表示は予定一覧へ、月表示は元の画面へ戻る。
@@ -71,7 +87,9 @@ struct EventDetailView: View {
             if let location = detail.location {
                 infoRow("mappin.and.ellipse") { Text(location).textSelection(.enabled) }
             }
-            if let attendanceText = detail.attendanceText {
+            if let rsvp = detail.rsvp {
+                rsvpRow(rsvp)
+            } else if let attendanceText = detail.attendanceText {
                 infoRow("person.crop.circle.badge.checkmark") { Text("出欠: \(attendanceText)") }
             }
             if let detailURL = detail.detailURL {
@@ -103,6 +121,51 @@ struct EventDetailView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// 出欠の回答欄。現在の出欠のボタンは塗りの記号と濃い背景で出し、色が見えなくても区別できるようにする。
+    private func rsvpRow(_ rsvp: EventRSVPState) -> some View {
+        infoRow("person.crop.circle.badge.checkmark") {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(rsvp.current == .needsAction ? "出欠（未回答）" : "出欠")
+                HStack(spacing: 6) {
+                    ForEach(AttendanceResponse.allCases, id: \.self) { response in
+                        rsvpButton(response, isSelected: rsvp.current == response.attendance)
+                    }
+                    if rsvp.isResponding { ProgressView().controlSize(.small) }
+                }
+                .disabled(rsvp.isResponding)
+                if let message = rsvp.errorMessage {
+                    HStack(alignment: .firstTextBaseline, spacing: 4) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.orange)
+                            .accessibilityHidden(true)
+                        Text(message)
+                            .font(.caption)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Button(action: actions.openInCalendar) {
+                        Label("カレンダーで開く", systemImage: "calendar")
+                    }
+                    .controlSize(.small)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func rsvpButton(_ response: AttendanceResponse, isSelected: Bool) -> some View {
+        let button = Button { actions.respond(response) } label: {
+            Label(response.title, systemImage: response.symbol(isSelected: isSelected))
+        }
+        .controlSize(.small)
+        .accessibilityLabel(response.title)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+        if isSelected {
+            button.buttonStyle(.borderedProminent)
+        } else {
+            button.buttonStyle(.bordered)
+        }
     }
 
     private var participants: some View {

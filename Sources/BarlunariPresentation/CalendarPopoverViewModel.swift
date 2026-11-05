@@ -104,6 +104,24 @@ public final class CalendarPopoverViewModel {
     /// 古い読み込みの結果を捨てるための通し番号。キャンセルを無視する処理が混ざっても上書きされない。
     private var loadGeneration = 0
 
+    /// 詳細の出欠の回答の状態。詳細を閉じるか、別の予定の詳細を開くと `idle` に戻る。
+    public enum RSVPPhase: Equatable, Sendable {
+        case idle
+        /// 保存中。ボタンを無効にして、二重送信を防ぐ。
+        case responding(AttendanceResponse)
+        /// 失敗した理由。利用者に見せる文。
+        case failed(String)
+    }
+
+    public private(set) var rsvpPhase: RSVPPhase = .idle
+
+    /// 回答した直後の予定。自分の出欠を回答の値にしたもの。
+    ///
+    /// 辞退した予定は、読み直すと `AgendaBuilder` が一覧から除くため、スナップショットに残らない。
+    /// 詳細を開いたまま辞退しても詳細を消さず、押し間違いを取り消せるよう、読み直しで予定が消えてもこの値で詳細を出し続ける。
+    /// 読み直した予定の出欠が同じ値になったら、スナップショットの予定に任せてこの値を捨てる。辞退以外の回答で予定が消えたら、削除されたとみなして捨てる。
+    private var respondedEvent: CalendarEvent?
+
     /// 許可を求めている間は `true`。許可のダイアログは 1 つしか出せないため、続けて押されても求め直さない。
     public private(set) var isRequestingAccess = false
 
@@ -111,6 +129,8 @@ public final class CalendarPopoverViewModel {
     private let requestCalendarAccess: RequestCalendarAccessUseCase
     private let openSystemSettings: OpenSystemSettingsUseCase
     private let refreshCalendarSources: RefreshCalendarSourcesUseCase
+    private let respondToEvent: RespondToEventUseCase
+    private let openEventInCalendarApp: OpenEventInCalendarAppUseCase
     private let dateProvider: any DateProvider
     private let urlOpener: any URLOpener
     private let changeNotifier: DataChangeNotifier
@@ -124,6 +144,8 @@ public final class CalendarPopoverViewModel {
         requestCalendarAccess: RequestCalendarAccessUseCase,
         openSystemSettings: OpenSystemSettingsUseCase,
         refreshCalendarSources: RefreshCalendarSourcesUseCase,
+        respondToEvent: RespondToEventUseCase,
+        openEventInCalendarApp: OpenEventInCalendarAppUseCase,
         dateProvider: any DateProvider,
         urlOpener: any URLOpener,
         changeNotifier: DataChangeNotifier,
@@ -138,6 +160,8 @@ public final class CalendarPopoverViewModel {
         self.requestCalendarAccess = requestCalendarAccess
         self.openSystemSettings = openSystemSettings
         self.refreshCalendarSources = refreshCalendarSources
+        self.respondToEvent = respondToEvent
+        self.openEventInCalendarApp = openEventInCalendarApp
         self.dateProvider = dateProvider
         self.urlOpener = urlOpener
         self.changeNotifier = changeNotifier
@@ -447,7 +471,7 @@ public final class CalendarPopoverViewModel {
 
     /// 詳細を表示している予定の内容。読み直した後の予定の内容で作るため、古い内容は残らない。
     public var eventDetail: EventDetailState? {
-        detailEventID.flatMap(event(for:)).map(detail(for:))
+        detailEventID.flatMap(detailEvent(for:)).map(detail(for:))
     }
 
     /// 例は `最終更新 12:00`。
@@ -682,12 +706,50 @@ public final class CalendarPopoverViewModel {
     public func showDetail(of id: CalendarEvent.Identity) {
         guard event(for: id) != nil else { return }
         isCalendarFilterOpen = false
+        if detailEventID != id { resetRSVP() }
         detailEventID = id
     }
 
     /// 詳細を閉じる。月表示は日の欄のスケジュールに、コンパクト表示は予定一覧に戻る。
     public func closeDetail() {
         detailEventID = nil
+        resetRSVP()
+    }
+
+    private func resetRSVP() {
+        respondedEvent = nil
+        rsvpPhase = .idle
+    }
+
+    /// 詳細の予定の自分の出欠を `response` にして保存する。
+    ///
+    /// 保存中は二重に送らない。すでにその出欠のときと、回答できない予定では何もしない。
+    /// 成功したら詳細の出欠を新しい値にする。一覧の更新は、EventKit の変更通知による読み直しに任せる。
+    /// 失敗したら `rsvpPhase` に理由を入れる。
+    public func respond(_ response: AttendanceResponse) async {
+        guard let id = detailEventID, let event = detailEvent(for: id), event.canRespond,
+              event.attendance != response.attendance
+        else { return }
+        if case .responding = rsvpPhase { return }
+        rsvpPhase = .responding(response)
+        do {
+            try await respondToEvent.execute(event: event, response: response)
+            guard detailEventID == id else { return }
+            respondedEvent = event.responded(with: response)
+            rsvpPhase = .idle
+        } catch {
+            guard detailEventID == id else { return }
+            rsvpPhase = .failed(UserFacingMessage.text(for: error))
+        }
+    }
+
+    /// 詳細の予定を標準のカレンダーアプリで開く。開けなかったら、理由を `rsvpPhase` に入れる。
+    public func openDetailInCalendarApp() async {
+        guard let id = detailEventID else { return }
+        let opened = await openEventInCalendarApp.execute(id)
+        if !opened, detailEventID == id {
+            rsvpPhase = .failed("カレンダーで予定を開けませんでした。カレンダーを開いて、予定を探してください。")
+        }
     }
 
     /// 月表示でマス目の日（予定のない場所と「他 N 件」）を押したときの操作。その日を選び、日の欄をその日のスケジュールにする。
@@ -918,8 +980,16 @@ public final class CalendarPopoverViewModel {
             loadedRange = range
             lastUpdated = dateProvider.now
             phase = .loaded
-            // 読み直した結果に詳細の予定がなければ、一覧に戻る。
-            if let detailEventID, event(for: detailEventID) == nil { closeDetail() }
+            // 回答した予定は、読み直した予定の出欠が回答と同じになったら、スナップショットの予定に任せる。
+            if let responded = respondedEvent, let fresh = event(for: responded.id), fresh.attendance == responded.attendance {
+                respondedEvent = nil
+            }
+            // 辞退以外で回答した予定が読み直しで消えたら、削除されたとみなして回答した値を捨てる。
+            if let responded = respondedEvent, responded.attendance != .declined, event(for: responded.id) == nil {
+                respondedEvent = nil
+            }
+            // 読み直した結果に詳細の予定がなければ、一覧に戻る。辞退した予定は、回答した値で詳細に残す。
+            if let detailEventID, detailEvent(for: detailEventID) == nil { closeDetail() }
         } catch is CancellationError {
             return
         } catch {
@@ -970,6 +1040,12 @@ public final class CalendarPopoverViewModel {
         return nil
     }
 
+    /// 詳細に出す予定。回答した直後の予定があれば、それを使う。
+    private func detailEvent(for identity: CalendarEvent.Identity) -> CalendarEvent? {
+        if let respondedEvent, respondedEvent.id == identity { return respondedEvent }
+        return event(for: identity)
+    }
+
     private func weekdayKind(of day: CalendarDay, formatter: CalendarFormatter) -> DayCellState.WeekdayKind {
         switch formatter.weekday(of: day) {
         case 1: .sunday
@@ -1004,6 +1080,7 @@ public final class CalendarPopoverViewModel {
             meetingURL: event.meetingURL,
             detailURL: event.detailURL,
             attendanceText: event.attendance.displayText,
+            rsvp: event.canRespond ? rsvpState(for: event) : nil,
             participants: event.participants.enumerated().map { index, participant in
                 ParticipantRowState(
                     id: index,
@@ -1017,6 +1094,14 @@ public final class CalendarPopoverViewModel {
             },
             notes: event.notes.map(LinkedText.attributed)
         )
+    }
+
+    private func rsvpState(for event: CalendarEvent) -> EventRSVPState {
+        switch rsvpPhase {
+        case .idle: EventRSVPState(current: event.attendance, responding: nil, errorMessage: nil)
+        case .responding(let response): EventRSVPState(current: event.attendance, responding: response, errorMessage: nil)
+        case .failed(let message): EventRSVPState(current: event.attendance, responding: nil, errorMessage: message)
+        }
     }
 
     private func timeText(of schedule: EventSchedule, on day: CalendarDay) -> String {

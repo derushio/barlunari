@@ -225,7 +225,7 @@ private struct AgendaOrDetail: View {
                 .accessibilityHidden(isCovered)
                 .transaction(value: isCovered) { $0.animation = nil }
             if let detail {
-                EventDetailView(detail: detail, onBack: viewModel.closeDetail)
+                EventDetailView(detail: detail, onBack: viewModel.closeDetail, actions: .init(viewModel))
                     .transition(reduceMotion ? .opacity : .move(edge: .trailing).combined(with: .opacity))
             } else if isFilterOpen {
                 // 表示するカレンダーの一覧は、予定一覧と同じ高さに固定する（開閉でパネルの高さを揺らさない）。

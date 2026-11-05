@@ -12,7 +12,7 @@ final class AppContainer {
 
     init() {
         let dateProvider = SystemDateProvider()
-        // EKEventStore は 1 つだけ持つ。カレンダー・予定・許可・同期の 4 つのポートを同じインスタンスが実装する。
+        // EKEventStore は 1 つだけ持つ。カレンダー・予定・許可・同期・出欠の回答の 5 つのポートを同じインスタンスが実装する。
         let calendarStore = EventKitCalendarStore(dateProvider: dateProvider)
         let urlOpener = WorkspaceURLOpener()
         let systemSettingsOpener = WorkspaceSystemSettingsOpener()
@@ -43,6 +43,10 @@ final class AppContainer {
             requestCalendarAccess: requestCalendarAccess,
             openSystemSettings: openSystemSettings,
             refreshCalendarSources: RefreshCalendarSourcesUseCase(refresher: calendarStore),
+            respondToEvent: RespondToEventUseCase(responder: calendarStore),
+            openEventInCalendarApp: OpenEventInCalendarAppUseCase(
+                opener: EventKitCalendarAppOpener(store: calendarStore, urlOpener: urlOpener)
+            ),
             dateProvider: dateProvider,
             urlOpener: urlOpener,
             changeNotifier: changeNotifier,

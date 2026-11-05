@@ -27,4 +27,14 @@ import Testing
         struct Secret: Error {}
         #expect(UserFacingMessage.text(for: Secret()) == "予期しないエラーが発生しました。もう一度お試しください。")
     }
+
+    @Test(arguments: [
+        EventResponseError.notRespondable, .eventNotFound, .unsupported, .saveFailed,
+    ])
+    func 出欠の回答の失敗は利用者に通じる文にする(error: EventResponseError) {
+        let text = UserFacingMessage.text(for: error)
+        #expect(text == UserFacingMessage.text(for: error as any Error))
+        #expect(text.hasSuffix("。"))
+        #expect(!text.contains("EventResponseError"))
+    }
 }

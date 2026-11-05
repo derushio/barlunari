@@ -40,7 +40,7 @@ struct MonthDayPane: View {
             .accessibilityHidden(isCovered)
         if let detail {
             EventDetailView(
-                detail: detail, onBack: viewModel.closeDetail, contentMaxHeight: contentMaxHeight,
+                detail: detail, onBack: viewModel.closeDetail, actions: .init(viewModel), contentMaxHeight: contentMaxHeight,
                 backTitle: "スケジュール", backAccessibilityLabel: "スケジュールに戻る"
             )
             .frame(maxHeight: .infinity, alignment: .top)
@@ -64,7 +64,7 @@ struct MonthDetailColumn: View {
         ZStack(alignment: .top) {
             if let detail = viewModel.eventDetail {
                 EventDetailView(
-                    detail: detail, onBack: viewModel.closeDetail, contentMaxHeight: contentMaxHeight,
+                    detail: detail, onBack: viewModel.closeDetail, actions: .init(viewModel), contentMaxHeight: contentMaxHeight,
                     backTitle: "", backAccessibilityLabel: "詳細を閉じる", showsCloseButton: true
                 )
                 .frame(maxHeight: .infinity, alignment: .top)

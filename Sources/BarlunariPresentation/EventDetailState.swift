@@ -15,6 +15,8 @@ public struct EventDetailState: Equatable, Sendable {
     public let detailURL: URL?
     /// 自分の出欠。出欠の概念がない予定では `nil`。
     public let attendanceText: String?
+    /// 出欠を回答できる予定の回答欄。回答できない予定は `nil` で、View は `attendanceText` の行を出す。
+    public let rsvp: EventRSVPState?
     public let participants: [ParticipantRowState]
     /// http と https の URL をリンクにしたメモ。
     public let notes: AttributedString?
@@ -26,6 +28,37 @@ public struct EventDetailState: Equatable, Sendable {
         case let (calendar?, nil): calendar
         case let (nil, account?): account
         case (nil, nil): nil
+        }
+    }
+}
+
+/// 予定の詳細の出欠の回答欄の表示内容。
+public struct EventRSVPState: Equatable, Sendable {
+    /// 自分の現在の出欠。ボタンの選択状態になる。
+    public let current: AttendanceStatus
+    /// 保存中の回答。`nil` でなければ、ボタンを無効にする。
+    public let responding: AttendanceResponse?
+    /// 回答に失敗した理由。`nil` でなければ、「カレンダーで開く」ボタンを出す。
+    public let errorMessage: String?
+
+    public var isResponding: Bool { responding != nil }
+}
+
+extension AttendanceResponse {
+    var title: String {
+        switch self {
+        case .accepted: "承諾"
+        case .tentative: "未定"
+        case .declined: "辞退"
+        }
+    }
+
+    /// 選んでいないときは輪郭、選んでいるときは塗りの記号にして、色が見えなくても区別できるようにする。
+    func symbol(isSelected: Bool) -> String {
+        switch self {
+        case .accepted: isSelected ? "checkmark.circle.fill" : "checkmark.circle"
+        case .tentative: isSelected ? "questionmark.circle.fill" : "questionmark.circle"
+        case .declined: isSelected ? "xmark.circle.fill" : "xmark.circle"
         }
     }
 }
