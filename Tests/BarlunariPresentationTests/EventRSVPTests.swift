@@ -318,6 +318,40 @@ import Testing
         #expect(viewModel.eventDetail?.rsvp?.current == .tentative)
     }
 
+    @Test func 保存の直後の読み直しが先に反映されても辞退後の詳細は閉じない() async throws {
+        let harness = Harness()
+        let viewModel = await openInvitation(harness)
+        harness.responder.hold()
+
+        let responding = Task { await viewModel.respond(.declined) }
+        await waitUntil { viewModel.rsvpPhase == .responding(.declined) && harness.responder.attemptCount == 1 }
+        // 保存が起こした変更通知の読み直しが、respond の完了より先に反映される。
+        await reload(harness, viewModel, returning: events(replacing: invitation, with: invitation.responded(with: .declined)))
+        #expect(viewModel.detailEventID == invitation.id)
+
+        harness.responder.release()
+        await responding.value
+
+        #expect(viewModel.detailEventID == invitation.id)
+        #expect(viewModel.eventDetail?.rsvp?.current == .declined)
+    }
+
+    @Test func 保存に失敗して予定が消えていたら失敗の後に一覧に戻る() async throws {
+        let harness = Harness(responder: FakeEventResponder(failure: EventResponseError.eventNotFound))
+        let viewModel = await openInvitation(harness)
+        harness.responder.hold()
+
+        let responding = Task { await viewModel.respond(.accepted) }
+        await waitUntil { viewModel.rsvpPhase == .responding(.accepted) && harness.responder.attemptCount == 1 }
+        await reload(harness, viewModel, returning: SampleData.events.filter { $0.id != invitation.id })
+        #expect(viewModel.detailEventID == invitation.id)
+
+        harness.responder.release()
+        await responding.value
+
+        #expect(viewModel.detailEventID == nil)
+    }
+
     // MARK: - 変更通知
 
     @Test func 変更通知による読み直しは回答の前後で増えない() async throws {

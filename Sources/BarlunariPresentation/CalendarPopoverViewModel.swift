@@ -733,7 +733,7 @@ public final class CalendarPopoverViewModel {
         guard let id = detailEventID, let event = detailEvent(for: id), event.canRespond,
               event.attendance != response.attendance
         else { return }
-        if case .responding = rsvpPhase { return }
+        if isResponding { return }
         rsvpPhase = .responding(response)
         do {
             try await respondToEvent.execute(event: event, response: response)
@@ -745,6 +745,18 @@ public final class CalendarPopoverViewModel {
             guard detailEventID == id else { return }
             rsvpPhase = .failed(UserFacingMessage.text(for: error))
         }
+        closeDetailIfEventIsGone(id)
+    }
+
+    /// 回答の保存中か。
+    private var isResponding: Bool {
+        if case .responding = rsvpPhase { return true }
+        return false
+    }
+
+    /// 保存中は閉じるのを見送った詳細を、保存の後に閉じる。詳細の予定がまだ開いていて、どこにもなければ一覧に戻る。
+    private func closeDetailIfEventIsGone(_ id: CalendarEvent.Identity) {
+        if detailEventID == id, detailEvent(for: id) == nil { closeDetail() }
     }
 
     /// 詳細の予定を標準のカレンダーアプリで開く。開けなかったら、理由を `rsvpPhase` に入れる。
@@ -986,7 +998,8 @@ public final class CalendarPopoverViewModel {
             phase = .loaded
             reconcileRespondedEvent(generation: generation)
             // 読み直した結果に詳細の予定がなければ、一覧に戻る。辞退した予定は、回答した値で詳細に残す。
-            if let detailEventID, detailEvent(for: detailEventID) == nil { closeDetail() }
+            // 回答の保存中は、保存が起こした変更通知の読み直しが先に届いても閉じない。閉じるかどうかは `respond` が保存の後に決める。
+            if let detailEventID, detailEvent(for: detailEventID) == nil, !isResponding { closeDetail() }
         } catch is CancellationError {
             return
         } catch {
