@@ -117,3 +117,73 @@ public final class FakeCalendarSourceRefresher: CalendarSourceRefresher {
     /// 同期を求められた回数。
     public var refreshCount: Int { count.withLock { $0 } }
 }
+
+/// 回答を記録するだけの `EventResponder`。
+///
+/// `setFailure(_:)` で、以後の回答をそのエラーで失敗させる。`nil` を渡すと成功に戻る。
+/// `onRespond` を渡すと、成功した回答のたびに実行する。予定のリポジトリに回答を反映する動きの再現に使う。
+public final class FakeEventResponder: EventResponder {
+    private struct State {
+        var responses: [Recorded] = []
+        var failure: (any Error)?
+        var attempts = 0
+    }
+
+    public struct Recorded: Sendable, Equatable {
+        public let event: CalendarEvent.Identity
+        public let response: AttendanceResponse
+
+        public init(event: CalendarEvent.Identity, response: AttendanceResponse) {
+            self.event = event
+            self.response = response
+        }
+    }
+
+    private let state = Mutex(State())
+    private let onRespond: (@Sendable (CalendarEvent.Identity, AttendanceResponse) -> Void)?
+
+    public init(
+        failure: (any Error)? = nil,
+        onRespond: (@Sendable (CalendarEvent.Identity, AttendanceResponse) -> Void)? = nil
+    ) {
+        self.onRespond = onRespond
+        state.withLock { $0.failure = failure }
+    }
+
+    public func setFailure(_ failure: (any Error)?) {
+        state.withLock { $0.failure = failure }
+    }
+
+    /// 成功した回答を、呼ばれた順に並べたもの。失敗した回答は含まない。
+    public var responses: [Recorded] { state.withLock { $0.responses } }
+
+    /// 回答を受け付けた回数。失敗した回答も数える。
+    public var attemptCount: Int { state.withLock { $0.attempts } }
+
+    public func respond(to event: CalendarEvent.Identity, with response: AttendanceResponse) async throws {
+        let failure = state.withLock { state -> (any Error)? in
+            state.attempts += 1
+            if state.failure == nil { state.responses.append(Recorded(event: event, response: response)) }
+            return state.failure
+        }
+        if let failure { throw failure }
+        onRespond?(event, response)
+    }
+}
+
+/// 開いた予定を記録するだけの `CalendarAppOpener`。`result` を `false` にすると、開けなかったことにする。
+public final class FakeCalendarAppOpener: CalendarAppOpener {
+    private let state = Mutex<[CalendarEvent.Identity]>([])
+    private let result: Bool
+
+    public init(result: Bool = true) {
+        self.result = result
+    }
+
+    public var openedEvents: [CalendarEvent.Identity] { state.withLock { $0 } }
+
+    public func open(_ event: CalendarEvent.Identity) async -> Bool {
+        state.withLock { $0.append(event) }
+        return result
+    }
+}

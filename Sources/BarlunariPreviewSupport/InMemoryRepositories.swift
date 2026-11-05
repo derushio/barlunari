@@ -125,6 +125,14 @@ public final class SyncableEventRepository: CalendarEventRepository {
         }
     }
 
+    /// 予定の自分の出欠を変える。回答が保存されたことの再現に使う。予定がなければ何もしない。
+    public func setAttendance(_ response: AttendanceResponse, of id: CalendarEvent.Identity) {
+        state.withLock { state in
+            guard let index = state.local.firstIndex(where: { $0.id == id }) else { return }
+            state.local[index] = state.local[index].responded(with: response)
+        }
+    }
+
     /// `events(in:calendars:)` が呼ばれた回数。
     public var fetchCount: Int { state.withLock { $0.fetchCount } }
 
