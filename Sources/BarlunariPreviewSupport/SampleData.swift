@@ -59,6 +59,10 @@ public enum SampleData {
         timed("night-bus", personalCalendar, "夜行バス", (2026, 10, 29, 23, 0), (2026, 10, 30, 6, 30)),
         allDay("culture-day", holidayCalendar, "文化の日", from: day(2026, 11, 3), days: 1),
         allDay("culture-day", workAccountHolidayCalendar, "文化の日", from: day(2026, 11, 3), days: 1),
+        // 出欠を回答できる招待。自分は未回答で、主催者は別の人である。
+        timed("invitation", workCalendar, "新機能の企画会議", (2026, 10, 28, 15, 0), (2026, 10, 28, 16, 0),
+              location: "会議室 B", meeting: "https://meet.google.com/inv-itat-ion", attendance: .needsAction,
+              participants: invitationParticipants),
         timed("declined", workCalendar, "辞退した会議", (2026, 10, 24, 16, 0), (2026, 10, 24, 17, 0),
               attendance: .declined),
     ]
@@ -168,6 +172,12 @@ public enum SampleData {
         participant(nil, "tanaka@example.com", .needsAction),
         participant("高橋 美咲", "takahashi@example.com", .declined),
         participant("伊藤 健", nil, .notApplicable),
+    ]
+
+    private static let invitationParticipants: [EventParticipant] = [
+        participant("山田 太郎", "yamada@example.com", .accepted, isOrganizer: true),
+        participant("佐藤 花子", "sato@example.com", .needsAction, isCurrentUser: true),
+        participant("鈴木 一郎", "suzuki@example.com", .accepted),
     ]
 
     public static func day(_ year: Int, _ month: Int, _ day: Int) -> CalendarDay {

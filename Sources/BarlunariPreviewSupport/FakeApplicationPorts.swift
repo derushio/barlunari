@@ -127,6 +127,8 @@ public final class FakeEventResponder: EventResponder {
         var responses: [Recorded] = []
         var failure: (any Error)?
         var attempts = 0
+        var isHeld = false
+        var pending: [CheckedContinuation<Void, Never>] = []
     }
 
     public struct Recorded: Sendable, Equatable {
@@ -154,6 +156,21 @@ public final class FakeEventResponder: EventResponder {
         state.withLock { $0.failure = failure }
     }
 
+    /// 以後の回答を、`release()` が呼ばれるまで返さない。保存中の状態の再現に使う。
+    public func hold() {
+        state.withLock { $0.isHeld = true }
+    }
+
+    /// `hold()` で止めた回答をすべて再開し、以後は止めない。
+    public func release() {
+        let pending = state.withLock { state -> [CheckedContinuation<Void, Never>] in
+            state.isHeld = false
+            defer { state.pending = [] }
+            return state.pending
+        }
+        pending.forEach { $0.resume() }
+    }
+
     /// 成功した回答を、呼ばれた順に並べたもの。失敗した回答は含まない。
     public var responses: [Recorded] { state.withLock { $0.responses } }
 
@@ -165,6 +182,13 @@ public final class FakeEventResponder: EventResponder {
             state.attempts += 1
             if state.failure == nil { state.responses.append(Recorded(event: event, response: response)) }
             return state.failure
+        }
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            let isHeld = state.withLock { state -> Bool in
+                if state.isHeld { state.pending.append(continuation) }
+                return state.isHeld
+            }
+            if !isHeld { continuation.resume() }
         }
         if let failure { throw failure }
         onRespond?(event, response)
