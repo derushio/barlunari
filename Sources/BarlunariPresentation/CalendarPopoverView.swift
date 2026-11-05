@@ -269,14 +269,37 @@ struct PopoverFooter: View {
                 .font(.caption2)
                 .foregroundStyle(.secondary)
             Spacer()
-            Button { viewModel.refresh() } label: { Image(systemName: "arrow.clockwise") }
-                .help("再読み込み")
-                .accessibilityLabel("再読み込み")
-            Button { openSettings() } label: { Image(systemName: "gearshape") }
-                .help("設定")
-                .accessibilityLabel("設定")
-            Button("終了") { quit() }
+            HStack(spacing: 2) {
+                Button { viewModel.refresh() } label: { FooterIcon(systemName: "arrow.clockwise") }
+                    .help("再読み込み")
+                    .accessibilityLabel("再読み込み")
+                Button { openSettings() } label: { FooterIcon(systemName: "gearshape") }
+                    .help("設定")
+                    .accessibilityLabel("設定")
+            }
+            // 取り消せない終了を、ほかのボタンの押し間違いで押さないよう、区切り線で離す。
+            Divider()
+                .frame(height: 14)
+                .padding(.horizontal, 6)
+            Button { quit() } label: {
+                Text("終了")
+                    .padding(.horizontal, 6)
+                    .frame(height: 24)
+                    .contentShape(Rectangle())
+            }
         }
         .buttonStyle(.borderless)
+    }
+}
+
+/// 下部のアイコンのボタンの中身。アイコンより広い範囲で押せるよう、枠の全体を押せる範囲にする。
+/// 高さは月表示の下部の高さ `MonthPopoverSizing.footerHeight` に収める。
+private struct FooterIcon: View {
+    let systemName: String
+
+    var body: some View {
+        Image(systemName: systemName)
+            .frame(width: 26, height: 24)
+            .contentShape(Rectangle())
     }
 }
