@@ -14,7 +14,7 @@ public struct AgendaBuilder: Sendable {
     /// UID と日時が同じ予定は 1 件にし、アカウントの並び順で先の予定を残す。同じアカウントの中では、入力で先の予定を残す。
     /// UID を持たない予定は同じ予定かどうか判定できないため、除去の対象にしない。
     /// 表示するカレンダーの絞り込みの後に除くので、先のアカウントのカレンダーを非表示にしていれば、後のアカウントの予定が残る。
-    /// 辞退した予定の除外は重複の除去の後に行う。
+    /// 辞退した予定も一覧に残す。見た目の区別は表示側が行う。
     public func build(
         events: [CalendarEvent],
         visibleCalendars: Set<UserCalendar.Identity>,
@@ -25,7 +25,7 @@ public struct AgendaBuilder: Sendable {
         let candidates = Self.removingDuplicates(
             from: events.filter { visibleCalendars.contains($0.calendarIdentity) },
             accountOrder: accountOrder
-        ).filter { $0.attendance != .declined }
+        )
         let days = range.days(calendar: calendar)
         // 夏時間の日は 24 時間とは限らないため、各日の終端は翌日の 0:00 から求める。
         let boundaries = days.map { $0.startDate(in: calendar) } + [range.end.startDate(in: calendar)]
@@ -39,13 +39,14 @@ public struct AgendaBuilder: Sendable {
 
     /// 日ごとの、予定があるカレンダーの色。重複は除き、その日の予定の並び順で最初に現れた順に並べる。
     ///
-    /// `calendars` にないカレンダーの予定は色を持たないので数えない。予定のない日はキーを持たない。
+    /// `calendars` にないカレンダーの予定は色を持たないので数えない。辞退した予定も数えず、辞退だけの日はキーを持たない。
+    /// 予定のない日もキーを持たない。
     public func colorsByDay(of days: [DayAgenda], calendars: [UserCalendar]) -> [CalendarDay: [CalendarColor]] {
         let colorByCalendar = Dictionary(calendars.map { ($0.id, $0.color) }, uniquingKeysWith: { first, _ in first })
         var result: [CalendarDay: [CalendarColor]] = [:]
         for agenda in days {
             var colors: [CalendarColor] = []
-            for event in agenda.events {
+            for event in agenda.events where event.attendance != .declined {
                 if let color = colorByCalendar[event.calendarIdentity], !colors.contains(color) {
                     colors.append(color)
                 }

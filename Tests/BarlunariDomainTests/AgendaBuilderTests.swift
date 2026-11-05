@@ -101,7 +101,7 @@ import Testing
         #expect(inUTC.map { titles($0) } == [["早朝"], []])
     }
 
-    @Test func excludesDeclinedEvents() {
+    @Test func keepsDeclinedEvents() {
         let events = [
             timed("1", "参加", from: TestSupport.date(2026, 10, 24, 10, 0), to: TestSupport.date(2026, 10, 24, 11, 0)),
             timed("2", "辞退", from: TestSupport.date(2026, 10, 24, 12, 0), to: TestSupport.date(2026, 10, 24, 13, 0), attendance: .declined),
@@ -109,7 +109,7 @@ import Testing
             timed("4", "未回答", from: TestSupport.date(2026, 10, 24, 14, 0), to: TestSupport.date(2026, 10, 24, 15, 0), attendance: .needsAction),
         ]
         let result = build(events, from: TestSupport.day(2026, 10, 24), days: 1)
-        #expect(titles(result[0]) == ["参加", "未回答"])
+        #expect(titles(result[0]) == ["終日辞退", "参加", "辞退", "未回答"])
     }
 
     @Test func excludesHiddenCalendars() {
@@ -197,6 +197,21 @@ import Testing
         )
         let workCalendar = UserCalendar(accountID: accountA, id: work, name: "仕事", color: try! CalendarColor(hex: "#112233"))
         #expect(builder.colorsByDay(of: days, calendars: [workCalendar]).isEmpty)
+    }
+
+    @Test func 辞退した予定は色に数えず辞退だけの日はキーを持たない() {
+        let workCalendar = UserCalendar(accountID: accountA, id: work, name: "仕事", color: try! CalendarColor(hex: "#112233"))
+        let personalCalendar = UserCalendar(accountID: accountA, id: personal, name: "私用", color: try! CalendarColor(hex: "#AABBCC"))
+        let day = TestSupport.day(2026, 10, 24)
+        let days = build([
+            timed("w1", "a", from: TestSupport.date(2026, 10, 24, 10), to: TestSupport.date(2026, 10, 24, 11)),
+            timed("p1", "b", from: TestSupport.date(2026, 10, 24, 12), to: TestSupport.date(2026, 10, 24, 13), calendarID: personal, attendance: .declined),
+            timed("p2", "c", from: TestSupport.date(2026, 10, 25, 12), to: TestSupport.date(2026, 10, 25, 13), calendarID: personal, attendance: .declined),
+        ], from: day, days: 2)
+        #expect(days.map { titles($0) } == [["a", "b"], ["c"]])
+        let colors = builder.colorsByDay(of: days, calendars: [workCalendar, personalCalendar])
+        #expect(colors[day] == [workCalendar.color])
+        #expect(colors[TestSupport.day(2026, 10, 25)] == nil)
     }
 
     // MARK: - 複数のアカウント

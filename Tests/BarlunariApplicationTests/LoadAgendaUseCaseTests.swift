@@ -96,10 +96,10 @@ import Testing
         #expect(snapshot.colorsByDay.isEmpty)
     }
 
-    @Test func 辞退した予定は色に数えない() async throws {
+    @Test func 辞退した予定は日に残り色には数えない() async throws {
         let events = RecordingEventRepository(events: [Fixtures.event("w1", calendar: "work", hour: 10, attendance: .declined)])
         let snapshot = try await makeUseCase(events: events).execute(range: Fixtures.oneDay(day))
-        #expect(snapshot.days[0].events.isEmpty)
+        #expect(snapshot.days[0].events.map(\.attendance) == [.declined])
         #expect(snapshot.colorsByDay.isEmpty)
     }
 
