@@ -17,7 +17,8 @@ import Testing
         calendars: [UserCalendar]? = nil,
         events: any CalendarEventRepository,
         visibility: CalendarVisibility = CalendarVisibility(),
-        calendarError: (any Error)? = nil
+        calendarError: (any Error)? = nil,
+        showDeclinedEvents: Bool? = nil
     ) -> LoadAgendaUseCase {
         LoadAgendaUseCase(
             authorizer: FakeCalendarAccessAuthorizer(status: status),
@@ -26,6 +27,7 @@ import Testing
             ),
             eventRepository: events,
             visibilityRepository: InMemoryCalendarVisibilityRepository(visibility: visibility),
+            showDeclinedEventsStore: InMemoryShowDeclinedEventsStore(value: showDeclinedEvents),
             dateProvider: FixedDateProvider()
         )
     }
@@ -208,5 +210,58 @@ import Testing
             accounts: [accountA, accountB], calendars: [holidayA, holidayB], events: events, visibility: visibility
         ).execute(range: Fixtures.oneDay(day))
         #expect(snapshot.days[0].events.map(\.accountID) == [accountB.id])
+    }
+
+    // MARK: - 辞退した予定を表示
+
+    func declinedAndAccepted() -> RecordingEventRepository {
+        RecordingEventRepository(events: [
+            Fixtures.event("accepted", calendar: "work", hour: 9),
+            Fixtures.event("declined", calendar: "work", hour: 14, attendance: .declined),
+        ])
+    }
+
+    @Test func 保存がなければ辞退した予定も含める() async throws {
+        let snapshot = try await makeUseCase(events: declinedAndAccepted()).execute(range: Fixtures.oneDay(day))
+        #expect(snapshot.days[0].events.map(\.eventID.rawValue) == ["accepted", "declined"])
+    }
+
+    @Test func 保存した値がオフなら辞退した予定を除く() async throws {
+        let snapshot = try await makeUseCase(events: declinedAndAccepted(), showDeclinedEvents: false)
+            .execute(range: Fixtures.oneDay(day))
+        #expect(snapshot.days[0].events.map(\.eventID.rawValue) == ["accepted"])
+    }
+
+    @Test func 保存した値がオンなら辞退した予定を含める() async throws {
+        let snapshot = try await makeUseCase(events: declinedAndAccepted(), showDeclinedEvents: true)
+            .execute(range: Fixtures.oneDay(day))
+        #expect(snapshot.days[0].events.map(\.eventID.rawValue) == ["accepted", "declined"])
+    }
+
+    @Test func 実行のたびにストアの値を読み直す() async throws {
+        let store = InMemoryShowDeclinedEventsStore()
+        let useCase = LoadAgendaUseCase(
+            authorizer: FakeCalendarAccessAuthorizer(status: .fullAccess),
+            calendarRepository: InMemoryCalendarRepository(accounts: [accountA], calendars: [work, personal]),
+            eventRepository: declinedAndAccepted(),
+            visibilityRepository: InMemoryCalendarVisibilityRepository(),
+            showDeclinedEventsStore: store,
+            dateProvider: FixedDateProvider()
+        )
+        let range = Fixtures.oneDay(day)
+
+        store.save(false)
+        #expect(try await useCase.execute(range: range).days[0].events.count == 1)
+        store.save(true)
+        #expect(try await useCase.execute(range: range).days[0].events.count == 2)
+    }
+
+    @Test func 辞退だけの日の色は辞退した予定を表示してもつかない() async throws {
+        let events = RecordingEventRepository(events: [Fixtures.event("declined", calendar: "work", hour: 14, attendance: .declined)])
+        let shown = try await makeUseCase(events: events, showDeclinedEvents: true).execute(range: Fixtures.oneDay(day))
+        let hidden = try await makeUseCase(events: events, showDeclinedEvents: false).execute(range: Fixtures.oneDay(day))
+        #expect(shown.colorsByDay.isEmpty)
+        #expect(hidden.colorsByDay.isEmpty)
+        #expect(hidden.days[0].events.isEmpty)
     }
 }

@@ -92,6 +92,32 @@ public final class InMemoryDisplayModeStore: DisplayModeStore {
     public var savedModes: [CalendarDisplayMode] { state.withLock { $0.savedModes } }
 }
 
+/// 保存した値を記録するインメモリの「辞退した予定を表示」の保存先。
+public final class InMemoryShowDeclinedEventsStore: ShowDeclinedEventsStore {
+    private struct State {
+        var value: Bool?
+        var savedValues: [Bool] = []
+    }
+
+    private let state: Mutex<State>
+
+    public init(value: Bool? = nil) {
+        state = Mutex(State(value: value))
+    }
+
+    public func load() -> Bool? { state.withLock { $0.value } }
+
+    public func save(_ show: Bool) {
+        state.withLock {
+            $0.value = show
+            $0.savedValues.append(show)
+        }
+    }
+
+    /// `save` で保存した値を、呼ばれた順に並べたもの。初期値は含まない。
+    public var savedValues: [Bool] { state.withLock { $0.savedValues } }
+}
+
 /// サーバーにだけある予定を持てるインメモリの予定リポジトリ。
 ///
 /// `stageRemote(_:)` で足した予定は、`pullRemote()` が呼ばれるまでローカルに届かず、取得にも含まれない。

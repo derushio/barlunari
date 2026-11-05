@@ -46,3 +46,28 @@ public struct SaveDisplayModeUseCase: Sendable {
         store.save(mode)
     }
 }
+
+public struct LoadShowDeclinedEventsUseCase: Sendable {
+    private let store: any ShowDeclinedEventsStore
+
+    public init(store: any ShowDeclinedEventsStore) {
+        self.store = store
+    }
+
+    /// 保存がなければ既定の値（表示する）を返す。
+    public func execute() -> Bool {
+        store.load() ?? ShowDeclinedEventsDefault.value
+    }
+}
+
+public struct SaveShowDeclinedEventsUseCase: Sendable {
+    private let store: any ShowDeclinedEventsStore
+
+    public init(store: any ShowDeclinedEventsStore) {
+        self.store = store
+    }
+
+    public func execute(_ show: Bool) {
+        store.save(show)
+    }
+}
