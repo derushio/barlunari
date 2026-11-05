@@ -102,6 +102,10 @@ final class Driver {
                 guard words.count == 2, ["light", "dark"].contains(words[1]) else { throw DriverError.message("使い方: appearance light|dark") }
                 harness.setAppearance(dark: words[1] == "dark")
                 label = "appearance-\(words[1])"
+            case "settings":
+                guard words.count == 2, ["open", "close"].contains(words[1]) else { throw DriverError.message("使い方: settings open|close") }
+                if words[1] == "open" { try await harness.openSettings() } else { try harness.closeSettings() }
+                label = "settings-\(words[1])"
             case "hide":
                 harness.hidePanel()
             case "show":

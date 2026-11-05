@@ -34,7 +34,14 @@ final class Harness {
     /// スリープからの復帰の通知を流す、注入したワークスペースの通知センター。
     private let workspaceNotificationCenter = NotificationCenter()
     private let panel: MenuBarPanel
-    private var hosting: NSView { panel.contentView ?? NSView() }
+    /// 設定画面の ViewModel。ポップオーバーと同じ `DataChangeNotifier` を共有し、設定の変更がポップオーバーの再読み込みにつながる。
+    private let settingsViewModel: SettingsViewModel
+    private let showDeclinedEventsStore: InMemoryShowDeclinedEventsStore
+    /// `settings open` で作る、設定画面のオフスクリーンのウインドウ。開いている間だけ持つ。
+    private var settingsWindow: NSWindow?
+    /// click、hover、scroll、key、screenshot の対象のウインドウ。設定を開いている間は設定画面、そうでなければポップオーバー。
+    private var targetWindow: NSWindow { settingsWindow ?? panel }
+    private var hosting: NSView { targetWindow.contentView ?? NSView() }
     /// 月表示の大きさを決める可視領域。実行する機械の画面に依らず、目標の大きさ 1862x1100（3 列）で出す。
     static let visibleFrame = CGRect(x: 0, y: 0, width: 2056, height: 1215)
     /// 直近の Esc で行った動作。
@@ -89,29 +96,49 @@ final class Harness {
         }
         let visibility = InMemoryCalendarVisibilityRepository()
         let displayModeStore = InMemoryDisplayModeStore()
+        let showDeclinedEventsStore = InMemoryShowDeclinedEventsStore()
+        self.showDeclinedEventsStore = showDeclinedEventsStore
+        let changeNotifier = DataChangeNotifier()
+        let openSystemSettings = OpenSystemSettingsUseCase(opener: settingsOpener)
+        let requestCalendarAccess = RequestCalendarAccessUseCase(authorizer: authorizer)
+        let listCalendars = ListCalendarsUseCase(
+            authorizer: authorizer, calendarRepository: calendarRepository, visibilityRepository: visibility
+        )
+        let setCalendarVisibility = SetCalendarVisibilityUseCase(visibilityRepository: visibility)
+        let launchAtLogin = FakeLaunchAtLoginService(isEnabled: false)
         viewModel = CalendarPopoverViewModel(
             loadAgenda: LoadAgendaUseCase(
                 authorizer: authorizer,
                 calendarRepository: calendarRepository,
                 eventRepository: eventRepository,
                 visibilityRepository: visibility,
+                showDeclinedEventsStore: showDeclinedEventsStore,
                 dateProvider: dateProvider
             ),
-            requestCalendarAccess: RequestCalendarAccessUseCase(authorizer: authorizer),
-            openSystemSettings: OpenSystemSettingsUseCase(opener: settingsOpener),
+            requestCalendarAccess: requestCalendarAccess,
+            openSystemSettings: openSystemSettings,
             refreshCalendarSources: RefreshCalendarSourcesUseCase(refresher: sourceRefresher),
             respondToEvent: RespondToEventUseCase(responder: responder),
             openEventInCalendarApp: OpenEventInCalendarAppUseCase(opener: calendarAppOpener),
             dateProvider: dateProvider,
             urlOpener: FakeURLOpener(),
-            changeNotifier: DataChangeNotifier(),
+            changeNotifier: changeNotifier,
             loadDisplayMode: LoadDisplayModeUseCase(store: displayModeStore),
             saveDisplayMode: SaveDisplayModeUseCase(store: displayModeStore),
-            listCalendars: ListCalendarsUseCase(
-                authorizer: authorizer, calendarRepository: calendarRepository, visibilityRepository: visibility
-            ),
-            setCalendarVisibility: SetCalendarVisibilityUseCase(visibilityRepository: visibility),
+            listCalendars: listCalendars,
+            setCalendarVisibility: setCalendarVisibility,
             workspaceNotificationCenter: workspaceNotificationCenter
+        )
+        settingsViewModel = SettingsViewModel(
+            getLaunchAtLogin: GetLaunchAtLoginUseCase(service: launchAtLogin),
+            setLaunchAtLogin: SetLaunchAtLoginUseCase(service: launchAtLogin),
+            loadShowDeclinedEvents: LoadShowDeclinedEventsUseCase(store: showDeclinedEventsStore),
+            saveShowDeclinedEvents: SaveShowDeclinedEventsUseCase(store: showDeclinedEventsStore),
+            listCalendars: listCalendars,
+            setCalendarVisibility: setCalendarVisibility,
+            requestCalendarAccess: requestCalendarAccess,
+            openSystemSettings: openSystemSettings,
+            changeNotifier: changeNotifier
         )
         let root = CalendarPopoverView(viewModel: viewModel, openSettings: {}, quit: {}, visibleFrame: Self.visibleFrame)
             .background(Color(nsColor: .windowBackgroundColor))
@@ -136,6 +163,38 @@ final class Harness {
         viewModel.reload()
         await viewModel.waitForLoad()
         await settle()
+    }
+
+    // MARK: 設定
+
+    /// 設定画面を作り、以降の click、hover、scroll、key、screenshot の対象にする。
+    /// ポップオーバーと同じく、完全に透明にしてデスクトップより背面に置き、マウスを通す。key にも前面にもしない。
+    /// 開くたびに `SettingsView` を作り直すので、設定画面を開き直したときに保存した値を表示することも確かめられる。
+    func openSettings() async throws {
+        guard settingsWindow == nil else { throw DriverError.message("設定はすでに開いている。閉じるには settings close") }
+        let hostingView = NSHostingView(rootView: SettingsView(viewModel: settingsViewModel).background(Color(nsColor: .windowBackgroundColor)))
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: SettingsView.width, height: SettingsView.height),
+            styleMask: [.borderless], backing: .buffered, defer: false
+        )
+        window.contentView = hostingView
+        window.isReleasedWhenClosed = false
+        window.appearance = panel.appearance
+        window.alphaValue = 0
+        window.ignoresMouseEvents = true
+        window.level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.desktopWindow)) - 1)
+        window.collectionBehavior = [.stationary, .ignoresCycle, .transient]
+        window.setFrameOrigin(panel.frame.origin)
+        window.orderBack(nil)
+        settingsWindow = window
+        await settle()
+    }
+
+    /// 設定画面を閉じ、操作の対象をポップオーバーに戻す。
+    func closeSettings() throws {
+        guard let window = settingsWindow else { throw DriverError.message("設定は開いていない。開くには settings open") }
+        window.orderOut(nil)
+        settingsWindow = nil
     }
 
     // MARK: 同期
@@ -185,7 +244,8 @@ final class Harness {
     /// 内容の大きさにパネルを合わせる。アプリでは次のランループに予約されるフレームの書き直しを、操作のたびに今すぐ行う。
     private func fit() {
         hosting.layoutSubtreeIfNeeded()
-        panel.updateFrame()
+        // 設定画面のウインドウは大きさが固定なので、フレームの書き直しはポップオーバーのパネルだけに行う。
+        if settingsWindow == nil { panel.updateFrame() }
         hosting.layoutSubtreeIfNeeded()
     }
 
@@ -267,6 +327,13 @@ final class Harness {
         return " 出欠=\(detail.attendanceText ?? "なし")(回答欄なし)"
     }
 
+    /// 操作の対象のウインドウと、設定の値。`辞退した予定を表示` の `保存` は、トグルで保存した値を呼ばれた順に並べたもの。
+    private var settingsSummary: String {
+        let saved = showDeclinedEventsStore.savedValues.map { $0 ? "on" : "off" }.joined(separator: ",")
+        let shown = settingsViewModel.showDeclinedEvents ? "on" : "off"
+        return "操作対象=\(settingsWindow == nil ? "ポップオーバー" : "設定") 辞退した予定を表示=\(shown)(保存=[\(saved)])"
+    }
+
     var stateSummary: String {
         let schedule = viewModel.selectedDaySchedule
         let rows = schedule.allDay.count + schedule.blocks.count
@@ -275,7 +342,7 @@ final class Harness {
         let settings = settingsOpener.openedDestinations.isEmpty ? "" : " システム設定=\(settingsOpener.openedDestinations)"
         let hiddenCount = viewModel.calendarFilterSections.flatMap(\.items).filter { !$0.isVisible }.count
         let filter = "\(viewModel.isCalendarFilterOpen ? "開" : "閉")(\(viewModel.calendarFilterPhase) 非表示=\(hiddenCount)件)"
-        return "モード=\(viewModel.displayMode.rawValue) カレンダー一覧=\(filter) 選択日=\(viewModel.selectedDay) 表示月=\(viewModel.displayedMonth) 状態=\(viewModel.phase) 詳細=\(detail) 一覧=\(viewModel.agendaDayCount)日 選択日の件数=\(rows)件(終日\(schedule.allDay.count) 時刻付き\(schedule.blocks.count))\(escape)\(settings)\(rsvpSummary) 回答=\(responder.responses.count)件 回答失敗=\(isRSVPFailing ? "on" : "off") カレンダーで開いた=\(calendarAppOpener.openedEvents.count)件 取得=\(eventRepository.fetchCount)回 同期要求=\(sourceRefresher.refreshCount)回"
+        return "\(settingsSummary) モード=\(viewModel.displayMode.rawValue) カレンダー一覧=\(filter) 選択日=\(viewModel.selectedDay) 表示月=\(viewModel.displayedMonth) 状態=\(viewModel.phase) 詳細=\(detail) 一覧=\(viewModel.agendaDayCount)日 選択日の件数=\(rows)件(終日\(schedule.allDay.count) 時刻付き\(schedule.blocks.count))\(escape)\(settings)\(rsvpSummary) 回答=\(responder.responses.count)件 回答失敗=\(isRSVPFailing ? "on" : "off") カレンダーで開いた=\(calendarAppOpener.openedEvents.count)件 取得=\(eventRepository.fetchCount)回 同期要求=\(sourceRefresher.refreshCount)回"
     }
 
     // MARK: イベントの合成
@@ -296,7 +363,7 @@ final class Harness {
         eventNumber += 1
         guard let event = NSEvent.mouseEvent(
             with: type, location: point, modifierFlags: [], timestamp: timestamp,
-            windowNumber: panel.windowNumber, context: nil, eventNumber: eventNumber,
+            windowNumber: targetWindow.windowNumber, context: nil, eventNumber: eventNumber,
             clickCount: clickCount, pressure: pressure
         ) else { throw DriverError.message("マウスイベントを作れなかった") }
         return event
@@ -312,14 +379,14 @@ final class Harness {
     /// パネルは key にしないので、`NSApp.sendEvent` ではキーがパネルに届かない。⌘ 付きのキーはキーボードショートカットとして処理し、
     /// 処理されなかったキーはパネルに直接届ける。1 つのキーは 1 回だけ届ける。
     private func deliverKey(_ event: NSEvent) {
-        if event.type == .keyDown, event.modifierFlags.contains(.command), panel.performKeyEquivalent(with: event) { return }
-        panel.sendEvent(event)
+        if event.type == .keyDown, event.modifierFlags.contains(.command), targetWindow.performKeyEquivalent(with: event) { return }
+        targetWindow.sendEvent(event)
     }
 
     /// スクロールは CGEvent 由来で、スクロールの CGEvent は windowNumber のフィールドを保持しないため、event.window が nil になる。
     /// window を差し替えたプロキシを NSApp.sendEvent に渡し、ローカルモニターとウィンドウの両方に届ける。
     private func deliverScroll(_ base: NSEvent) {
-        let event = base.window == nil ? ScrollEventProxy.make(base: base, window: panel, location: base.locationInWindow) : base
+        let event = base.window == nil ? ScrollEventProxy.make(base: base, window: targetWindow, location: base.locationInWindow) : base
         NSApplication.shared.sendEvent(event)
     }
 
@@ -357,7 +424,7 @@ final class Harness {
         for type in [NSEvent.EventType.keyDown, .keyUp] {
             guard let event = NSEvent.keyEvent(
                 with: type, location: .zero, modifierFlags: modifiers, timestamp: timestamp,
-                windowNumber: panel.windowNumber, context: nil, characters: characters,
+                windowNumber: targetWindow.windowNumber, context: nil, characters: characters,
                 charactersIgnoringModifiers: characters, isARepeat: false, keyCode: keyCode
             ) else { throw DriverError.message("キーイベントを作れなかった") }
             deliverKey(event)
@@ -390,8 +457,8 @@ final class Harness {
         let screenHeight = CGDisplayBounds(CGMainDisplayID()).height
         cg.location = CGPoint(x: point.x, y: screenHeight - point.y)
         // ウィンドウの番号を指定しても、スクロールの CGEvent は保持せず、NSEvent の window は nil になる。deliverScroll で補う。
-        cg.setIntegerValueField(.mouseEventWindowUnderMousePointer, value: Int64(panel.windowNumber))
-        cg.setIntegerValueField(.mouseEventWindowUnderMousePointerThatCanHandleThisEvent, value: Int64(panel.windowNumber))
+        cg.setIntegerValueField(.mouseEventWindowUnderMousePointer, value: Int64(targetWindow.windowNumber))
+        cg.setIntegerValueField(.mouseEventWindowUnderMousePointerThatCanHandleThisEvent, value: Int64(targetWindow.windowNumber))
         cg.setIntegerValueField(.scrollWheelEventIsContinuous, value: continuous ? 1 : 0)
         cg.setIntegerValueField(.scrollWheelEventScrollPhase, value: phase)
         cg.setIntegerValueField(.scrollWheelEventMomentumPhase, value: momentum)
