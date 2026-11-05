@@ -153,19 +153,13 @@ struct EventDetailView: View {
         }
     }
 
-    @ViewBuilder
     private func rsvpButton(_ response: AttendanceResponse, isSelected: Bool) -> some View {
-        let button = Button { actions.respond(response) } label: {
+        Button { actions.respond(response) } label: {
             Label(response.title, systemImage: response.symbol(isSelected: isSelected))
         }
-        .controlSize(.small)
+        .buttonStyle(RSVPButtonStyle(isSelected: isSelected))
         .accessibilityLabel(response.title)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
-        if isSelected {
-            button.buttonStyle(.borderedProminent)
-        } else {
-            button.buttonStyle(.bordered)
-        }
     }
 
     private var participants: some View {
@@ -247,5 +241,30 @@ struct ParticipantRowView: View {
         case .declined: .red
         case .needsAction, .notApplicable: .secondary
         }
+    }
+}
+
+/// 出欠の回答ボタン。選んでいるボタンは、塗りつぶした背景、太い文字、塗りの記号で区別する。
+/// ウインドウが非アクティブでも見た目が変わらないよう、標準のボタンの装飾は使わない。
+private struct RSVPButtonStyle: ButtonStyle {
+    let isSelected: Bool
+    @Environment(\.isEnabled) private var isEnabled
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.caption.weight(isSelected ? .bold : .regular))
+            .foregroundStyle(isSelected ? Color.white : Color.primary)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(isSelected ? Color.accentColor : Color.secondary.opacity(configuration.isPressed ? 0.3 : 0.12))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 6)
+                    .stroke(Color.secondary.opacity(isSelected ? 0 : 0.5), lineWidth: 1)
+            )
+            .opacity(isEnabled ? 1 : 0.6)
+            .contentShape(RoundedRectangle(cornerRadius: 6))
     }
 }
