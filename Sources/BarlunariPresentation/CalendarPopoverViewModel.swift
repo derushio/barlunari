@@ -62,7 +62,7 @@ public final class CalendarPopoverViewModel {
     private var lastSeenToday: CalendarDay
     /// 日付の変化などで画面の表示を作り直させるための通し番号。値自体に意味はない。
     private var clockRevision = 0
-    /// 予定の読み込みのたびに進める通し番号。月表示の予定の配置の記憶を捨てる印の一部で、予定の層が読み込みを検知するためにも読む（観測の対象）。
+    /// 予定の読み込みのたびに進める通し番号。月表示の予定の配置の記憶を捨てる印の一部で、予定の層と予定一覧のセクションが読み込みを検知するためにも読む（観測の対象）。
     private var dataRevision = 0
     /// 月表示の週ごとの予定の配置の記憶。観測の対象にしない。
     @ObservationIgnored private var monthLayoutCache = MonthWeekLayoutCache()
@@ -466,6 +466,9 @@ public final class CalendarPopoverViewModel {
 
     /// 番号の日の表示内容。セクションの View が自分の日だけを読むための入口で、全日分の配列は作らない。範囲外なら `nil`。
     public func agendaSection(at index: Int) -> AgendaSectionState? {
+        // `CalendarEvent` の等価判定は ID だけを比べるので、出欠などの内容だけが変わった読み直しでは `eventsByDay` の変更が通知されない。
+        // 読み込みのたびに進む `dataRevision` を読んで、読み込みのたびに作り直させる。
+        _ = dataRevision
         guard let day = weekTimeline.day(at: index) else { return nil }
         let calendar = dateProvider.calendar
         let today = self.today

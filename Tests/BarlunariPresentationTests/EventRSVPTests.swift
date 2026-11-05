@@ -2,6 +2,7 @@ import Foundation
 import BarlunariApplication
 import BarlunariDomain
 import BarlunariPreviewSupport
+import Synchronization
 import Testing
 
 @testable import BarlunariPresentation
@@ -285,6 +286,39 @@ import Testing
         #expect(viewModel.sections(from: SampleData.day(2026, 10, 28), count: 1)[0].rows.allSatisfy { $0.id != invitation.id })
         #expect(viewModel.detailEventID == invitation.id)
         #expect(viewModel.eventDetail?.rsvp?.current == .declined)
+    }
+
+    @Test func 承諾して読み直すと一覧の行から未回答の表示が消える() async throws {
+        let harness = Harness()
+        let viewModel = await openInvitation(harness)
+        let before = viewModel.sections(from: SampleData.day(2026, 10, 28), count: 1)[0].rows
+        #expect(before.first { $0.id == invitation.id }?.attendance == .needsResponse)
+
+        await viewModel.respond(.accepted)
+        await reload(harness, viewModel, returning: events(replacing: invitation, with: invitation.responded(with: .accepted)))
+
+        let rows = viewModel.sections(from: SampleData.day(2026, 10, 28), count: 1)[0].rows
+        #expect(rows.first { $0.id == invitation.id }?.attendance == ListedAttendance.none)
+    }
+
+    @Test(arguments: [true, false])
+    func 出欠だけが変わった読み直しで予定一覧と日の欄の変更を観測できる(readsAgenda: Bool) async throws {
+        let harness = Harness()
+        let viewModel = await harness.loadedPopover()
+        let day = SampleData.day(2026, 10, 28)
+        viewModel.select(day)
+        await viewModel.waitForLoad()
+        let changed = Mutex(false)
+        // 予定の等価判定は ID だけを比べるので、出欠だけが変わっても日ごとの予定は等しいとみなされる。
+        withObservationTracking {
+            if readsAgenda { _ = viewModel.sections(from: day, count: 1) } else { _ = viewModel.daySchedule(for: day) }
+        } onChange: {
+            changed.withLock { $0 = true }
+        }
+
+        await reload(harness, viewModel, returning: events(replacing: invitation, with: invitation.responded(with: .accepted)))
+
+        #expect(changed.withLock { $0 })
     }
 
     @Test func 辞退を承諾で取り消せる() async throws {
