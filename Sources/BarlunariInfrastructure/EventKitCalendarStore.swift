@@ -3,16 +3,18 @@ import Foundation
 import BarlunariApplication
 import BarlunariDomain
 
-/// `EKEventStore` を 1 つ持ち、カレンダー・予定・許可・同期の 4 つのポートを実装する。
+/// `EKEventStore` を 1 つ持ち、カレンダー・予定・許可・同期・出欠の回答の 5 つのポートを実装する。
 ///
 /// `EKEventStore` と `EKEvent` などは `Sendable` ではないため、actor に閉じ込める。
 /// 外へ返すのは、EventKit に依存しない値と、それを `EventKitMapper` で変換したドメインの型だけである。
-public actor EventKitCalendarStore: CalendarRepository, CalendarEventRepository, CalendarAccessAuthorizer, CalendarSourceRefresher {
+public actor EventKitCalendarStore: CalendarRepository, CalendarEventRepository, CalendarAccessAuthorizer, CalendarSourceRefresher, EventResponder {
     private let store = EKEventStore()
     private let mapper: EventKitMapper
+    private let dateProvider: any DateProvider
     private let changeObserver: StoreChangeObserver
 
     public init(dateProvider: any DateProvider) {
+        self.dateProvider = dateProvider
         mapper = EventKitMapper(dateProvider: dateProvider)
         changeObserver = StoreChangeObserver()
         changeObserver.start(observing: store)
@@ -108,6 +110,101 @@ public actor EventKitCalendarStore: CalendarRepository, CalendarEventRepository,
         Log.calendar.info(
             "予定を取得した: カレンダー \(calendarCount, privacy: .public) 件、予定 \(eventCount, privacy: .public) 件、UID なし \(withoutUIDCount, privacy: .public) 件"
         )
+    }
+
+    // MARK: - EventResponder
+
+    /// 自分の出欠を変えて、表示している回だけ（`.thisEvent`）に保存する。
+    ///
+    /// `EKParticipant.participantStatus` は公開 API では読み取り専用である。`attendees` が返す実際のインスタンスは
+    /// 非公開のサブクラスで、`setParticipantStatus:` に応答するときだけ KVC で書く。応答しなければ書かずに `unsupported` を投げる。
+    public func respond(to identity: CalendarEvent.Identity, with response: AttendanceResponse) async throws {
+        try Self.requireFullAccess()
+        guard let event = findEvent(identity) else { throw EventResponseError.eventNotFound }
+        guard let me = event.attendees?.first(where: \.isCurrentUser), event.organizer?.isCurrentUser != true else {
+            throw EventResponseError.notRespondable
+        }
+        guard me.responds(to: Selector(("setParticipantStatus:"))) else {
+            Log.calendar.error("出欠の回答に失敗した: この macOS では参加者の出欠を書き込めない")
+            throw EventResponseError.unsupported
+        }
+        let status = Self.participantStatus(of: response)
+
+        // 繰り返しの予定でまだ切り離されていない回は、アラームがあると保存が Access Denied で失敗する。
+        // アラームを外して保存し、同じ相対時刻のアラームを付け直してもう一度保存する。
+        let alarms = event.alarms ?? []
+        let removesAlarms = event.hasRecurrenceRules && !event.isDetached && !alarms.isEmpty
+        do {
+            if removesAlarms { event.alarms = nil }
+            me.setValue(status.rawValue, forKey: "participantStatus")
+            guard me.participantStatus == status else {
+                event.refresh()
+                throw EventResponseError.unsupported
+            }
+            try store.save(event, span: .thisEvent)
+        } catch let error as EventResponseError {
+            throw error
+        } catch {
+            event.refresh()
+            let nsError = error as NSError
+            Log.calendar.error(
+                "出欠の回答に失敗した: 保存できなかった domain=\(nsError.domain, privacy: .public) code=\(nsError.code, privacy: .public)"
+            )
+            throw EventResponseError.saveFailed
+        }
+        if removesAlarms { restoreAlarms(alarms, on: event) }
+    }
+
+    /// 外したアラームを付け直して保存する。回答は保存済みなので、失敗しても回答の失敗にはしない。
+    private func restoreAlarms(_ alarms: [EKAlarm], on event: EKEvent) {
+        for alarm in alarms {
+            // 絶対時刻のアラームは繰り返しの予定の回ごとの相対時刻に戻せないため、相対時刻のものだけ付け直す。
+            event.addAlarm(alarm.absoluteDate == nil ? EKAlarm(relativeOffset: alarm.relativeOffset) : alarm)
+        }
+        do {
+            try store.save(event, span: .thisEvent)
+        } catch {
+            event.refresh()
+            let nsError = error as NSError
+            Log.calendar.error(
+                "アラームを付け直せなかった domain=\(nsError.domain, privacy: .public) code=\(nsError.code, privacy: .public)"
+            )
+        }
+    }
+
+    private static func participantStatus(of response: AttendanceResponse) -> EKParticipantStatus {
+        switch response {
+        case .accepted: .accepted
+        case .tentative: .tentative
+        case .declined: .declined
+        }
+    }
+
+    /// 標準のカレンダーアプリで予定を開く URL。予定が見つからなければ `nil`。
+    public func calendarAppURL(for identity: CalendarEvent.Identity) async -> URL? {
+        guard Self.currentStatus() == .fullAccess, let event = findEvent(identity), let start = event.startDate else { return nil }
+        return CalendarAppURL.url(
+            calendarItemIdentifier: event.calendarItemIdentifier,
+            startDate: start,
+            isAllDay: event.isAllDay,
+            hasRecurrenceRules: event.hasRecurrenceRules,
+            calendar: dateProvider.calendar
+        )
+    }
+
+    /// アカウント・カレンダー・回の開始日時が一致する予定。ID だけでは同一視しない。
+    private func findEvent(_ identity: CalendarEvent.Identity) -> EKEvent? {
+        guard let locator = EventKitEventLocator(identity) else { return nil }
+        let calendars = eventCalendars().filter {
+            $0.calendarIdentifier == locator.calendarIdentifier && $0.source?.sourceIdentifier == locator.sourceIdentifier
+        }
+        guard !calendars.isEmpty else { return nil }
+        let interval = locator.searchInterval
+        let predicate = store.predicateForEvents(withStart: interval.start, end: interval.end, calendars: calendars)
+        return store.events(matching: predicate).first {
+            guard let start = $0.startDate else { return false }
+            return locator.matches(identifier: $0.eventIdentifier, calendarItemIdentifier: $0.calendarItemIdentifier, startDate: start)
+        }
     }
 
     // MARK: - EventKit の型の読み取り
