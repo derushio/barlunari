@@ -82,7 +82,7 @@ EventKit との連携はすべて `BarlunariInfrastructure` に閉じ込めま�
 - 祝日カレンダーと、複数のアカウントに招待された会議は、アカウントごとに別のカレンダーに入り、iCalendar の UID が同じになります
 - 同じ予定の判定には、`CalendarEvent.SharedKey`、つまり `iCalendarUID` と `EventSchedule` の組を使います。繰り返しの予定はすべての回が同じ UID を持つため、日時と組にして回を区別します。UID を持たない予定は、重複の判定に使いません
 - `AgendaBuilder` が、同じ `SharedKey` の予定のうち、アカウントの並び順で先の予定を残します。同じアカウントの中では、先に取得した予定を残します
-- 重複の除去は、表示するカレンダーの絞り込みの後、辞退した予定の除外の前に行います
+- 重複の除去は、表示するカレンダーの絞り込みの後に行います。辞退した予定は一覧に残し、`colorsByDay` だけが色に数えません
 - 重複の除去が実機で効いているかは、`Log.calendar` の記録を `log` コマンドで確かめます
 
 ## 出欠の回答
@@ -97,7 +97,7 @@ EventKit との連携はすべて `BarlunariInfrastructure` に閉じ込めま�
 - 回答の成功後の一覧の更新は、`EKEventStoreChanged` による既存の読み直しに任せます。回答のための読み直しは作りません
 - 失敗したら、詳細にエラーの文と「カレンダーで開く」ボタンを出します。ボタンは `OpenEventInCalendarAppUseCase` から `CalendarAppOpener` を通り、`EventKitCalendarAppOpener` が `EventKitCalendarStore.calendarAppURL(for:)` で求めた URL を `URLOpener`（`NSWorkspace`）で開きます
 - URL は `CalendarAppURL` が組み立てます。通常の予定は `ical://ekevent/<calendarItemIdentifier を urlPathAllowed でパーセントエンコード>?method=show&options=more` です。繰り返しの予定（`hasRecurrenceRules`）は `ical://ekevent/<日付>/<id>?method=show&options=more` で、日付は書式 `yyyyMMdd'T'HHmmss'Z'` の回の開始日時です。時刻付きの予定は UTC で、終日の予定はアプリの暦のタイムゾーンで書式化します
-- 辞退した予定は、読み直すと `AgendaBuilder` が一覧から除きます。詳細を開いたまま辞退しても詳細を閉じないよう、`CalendarPopoverViewModel` が回答した直後の予定を `respondedEvent` に持ち、読み直しで予定が消えても詳細に出し続けます。読み直した予定の出欠が回答と同じになったら一覧の予定に任せ、辞退以外の回答で予定が消えたら削除されたとみなして詳細を閉じます。詳細を閉じるか別の予定を開くと捨てます
+- 辞退した予定は `AgendaBuilder` が一覧に残し、Presentation の `ListedAttendance`（なし・未回答・辞退）で見た目を変えます。未回答は `attendance == .needsAction && canRespond` のときだけです。詳細を開いたまま辞退しても詳細を閉じないよう、`CalendarPopoverViewModel` が回答した直後の予定を `respondedEvent` に持ち、読み直しの結果に予定がなくても詳細に出し続けます。読み直した予定の出欠が回答と同じになったら一覧の予定に任せ、辞退以外の回答で予定が消えたら削除されたとみなして詳細を閉じます。詳細を閉じるか別の予定を開くと捨てます
 - Google Calendar API と OAuth は使いません。アプリは認証情報を持たないためです
 
 ## テスト
