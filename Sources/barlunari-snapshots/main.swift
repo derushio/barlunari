@@ -490,6 +490,8 @@ func runSnapshots(outputDirectory: URL) async throws {
     for (name, tab) in [("general", SettingsView.Tab.general), ("calendars", .calendars)] {
         try await render(SettingsView(viewModel: settings.settings, initialTab: tab), appearance: .aqua, to: output("settings-\(name)"))
     }
+    // アプリと同じタイトルバー付きのウインドウ。タブの切り替えの部品とタイトルバーの間の余白を確かめる。
+    try await renderSettingsWindow(settings.settings, to: output("settings-window-light"))
 
     // 「辞退した予定を表示」をオフにして保存したあとに開いた一般タブ。
     let settingsDeclinedOff = Fixture(showDeclinedEvents: false)
@@ -520,4 +522,28 @@ do {
 } catch {
     FileHandle.standardError.write(Data("スナップショットの出力に失敗した: \(error)\n".utf8))
     exit(1)
+}
+
+/// 設定画面を、`SettingsWindowController` と同じタイトルバー付きのウインドウに載せ、タイトルバーを含めて PNG にする。
+/// ウインドウは画面の外に置き、前面にも key にもしない。
+@MainActor
+func renderSettingsWindow(_ viewModel: SettingsViewModel, to url: URL) async throws {
+    NSApplication.shared.appearance = NSAppearance(named: .aqua)
+    let window = NSWindow(contentViewController: NSHostingController(rootView: SettingsView(viewModel: viewModel)))
+    window.title = "Barlunari の設定"
+    window.styleMask = [.titled, .closable, .miniaturizable]
+    window.appearance = NSAppearance(named: .aqua)
+    window.setFrameOrigin(NSPoint(x: -5000, y: -5000))
+    await pump(0.25)
+    // タイトルバーはコンテンツビューの外にあるため、その親のウインドウの枠のビューを描く。
+    guard let frameView = window.contentView?.superview,
+          let rep = frameView.bitmapImageRepForCachingDisplay(in: frameView.bounds) else {
+        throw SnapshotError.renderFailed("ウインドウの枠を描けなかった: \(url.lastPathComponent)")
+    }
+    frameView.cacheDisplay(in: frameView.bounds, to: rep)
+    guard let data = rep.representation(using: .png, properties: [:]) else {
+        throw SnapshotError.renderFailed("PNG に変換できなかった: \(url.lastPathComponent)")
+    }
+    try data.write(to: url)
+    print("\(url.path) \(Int(frameView.bounds.width))x\(Int(frameView.bounds.height))")
 }
