@@ -289,6 +289,14 @@ func runSnapshots(outputDirectory: URL) async throws {
         try await render(popoverView(fixture), appearance: .aqua, to: output("popover-selected-other-day"))
     }
 
+    // ポップオーバー（未回答の予定を含む日を選択した状態）。
+    for (name, appearance) in [("popover-selected-needs-response-light", NSAppearance.Name.aqua), ("popover-selected-needs-response-dark", .darkAqua)] {
+        let fixture = Fixture()
+        fixture.popover.select(SampleData.day(2026, 10, 28))
+        await fixture.popover.waitForLoad()
+        try await render(popoverView(fixture), appearance: appearance, to: output(name))
+    }
+
     // 許可が未決定・拒否・カレンダーなし・エラー。
     let guides: [(String, Fixture)] = [
         ("popover-not-determined", Fixture(status: .notDetermined)),
@@ -379,6 +387,15 @@ func runSnapshots(outputDirectory: URL) async throws {
     for (name, appearance) in [("month-day-overlap-light", NSAppearance.Name.aqua), ("month-day-overlap-dark", .darkAqua)] {
         let fixture = await loadedMonth()
         fixture.popover.showSchedule(of: SampleData.day(2026, 10, 23))
+        try await render(popoverView(fixture), appearance: appearance, to: output(name))
+    }
+    // 辞退した予定（10 月 24 日）と未回答の予定（10 月 28 日）を含む日の欄。
+    for (name, day, appearance) in [
+        ("month-day-declined-light", 24, NSAppearance.Name.aqua), ("month-day-declined-dark", 24, .darkAqua),
+        ("month-day-needs-response-light", 28, .aqua), ("month-day-needs-response-dark", 28, .darkAqua),
+    ] {
+        let fixture = await loadedMonth()
+        fixture.popover.showSchedule(of: SampleData.day(2026, 10, day))
         try await render(popoverView(fixture), appearance: appearance, to: output(name))
     }
     do {
