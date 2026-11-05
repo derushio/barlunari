@@ -171,6 +171,14 @@ public final class FakeEventResponder: EventResponder {
         pending.forEach { $0.resume() }
     }
 
+    /// `hold()` で止めた回答のうち、最初の 1 件だけを再開する。止めたままにする設定は変えない。
+    public func releaseFirst() {
+        let first = state.withLock { state -> CheckedContinuation<Void, Never>? in
+            state.pending.isEmpty ? nil : state.pending.removeFirst()
+        }
+        first?.resume()
+    }
+
     /// 成功した回答を、呼ばれた順に並べたもの。失敗した回答は含まない。
     public var responses: [Recorded] { state.withLock { $0.responses } }
 

@@ -352,6 +352,32 @@ import Testing
         #expect(viewModel.detailEventID == nil)
     }
 
+    @Test func 保存中に詳細を閉じて開き直しても前の回答の完了が状態を上書きしない() async throws {
+        let harness = Harness()
+        let viewModel = await openInvitation(harness)
+        harness.responder.hold()
+
+        let first = Task { await viewModel.respond(.declined) }
+        await waitUntil { harness.responder.attemptCount == 1 }
+        viewModel.closeDetail()
+        viewModel.showDetail(of: invitation.id)
+        let second = Task { await viewModel.respond(.accepted) }
+        await waitUntil { viewModel.rsvpPhase == .responding(.accepted) && harness.responder.attemptCount == 2 }
+
+        // 1 回目の保存だけが完了する。2 回目はまだ保存中である。
+        harness.responder.releaseFirst()
+        await first.value
+
+        #expect(viewModel.rsvpPhase == .responding(.accepted))
+        #expect(viewModel.eventDetail?.rsvp?.current == .needsAction)
+        #expect(viewModel.eventDetail?.rsvp?.responding == .accepted)
+
+        harness.responder.release()
+        await second.value
+        #expect(viewModel.rsvpPhase == .idle)
+        #expect(viewModel.eventDetail?.rsvp?.current == .accepted)
+    }
+
     // MARK: - 変更通知
 
     @Test func 変更通知による読み直しは回答の前後で増えない() async throws {

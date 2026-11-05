@@ -114,6 +114,8 @@ public final class CalendarPopoverViewModel {
     }
 
     public private(set) var rsvpPhase: RSVPPhase = .idle
+    /// 回答のたびと、回答の状態を戻すたびに進める通し番号。これと違う番号で始めた回答の完了は、状態を更新しない。
+    @ObservationIgnored private var rsvpSequence = 0
 
     /// 回答した直後の予定。自分の出欠を回答の値にしたもの。
     ///
@@ -720,6 +722,8 @@ public final class CalendarPopoverViewModel {
     }
 
     private func resetRSVP() {
+        // 保存中の回答の完了を無効にする。詳細を閉じて開き直した後の回答の状態を、前の回答の完了が上書きしないため。
+        rsvpSequence += 1
         respondedEvent = nil
         rsvpPhase = .idle
     }
@@ -734,15 +738,17 @@ public final class CalendarPopoverViewModel {
               event.attendance != response.attendance
         else { return }
         if isResponding { return }
+        rsvpSequence += 1
+        let sequence = rsvpSequence
         rsvpPhase = .responding(response)
         do {
             try await respondToEvent.execute(event: event, response: response)
-            guard detailEventID == id else { return }
+            guard rsvpSequence == sequence, detailEventID == id else { return }
             respondedEvent = event.responded(with: response)
             respondedEventGeneration = loadGeneration
             rsvpPhase = .idle
         } catch {
-            guard detailEventID == id else { return }
+            guard rsvpSequence == sequence, detailEventID == id else { return }
             rsvpPhase = .failed(UserFacingMessage.text(for: error))
         }
         closeDetailIfEventIsGone(id)
