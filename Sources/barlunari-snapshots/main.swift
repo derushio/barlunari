@@ -398,6 +398,26 @@ func runSnapshots(outputDirectory: URL) async throws {
         fixture.popover.showSchedule(of: SampleData.day(2026, 10, day))
         try await render(popoverView(fixture), appearance: appearance, to: output(name))
     }
+    // 未回答と辞退の終日の予定。月のマス目の帯と、日の欄の終日の行を確かめる。
+    for (name, appearance) in [("month-attendance-allday-light", NSAppearance.Name.aqua), ("month-attendance-allday-dark", .darkAqua)] {
+        func allDay(_ id: String, _ title: String, from day: Int, days: Int, attendance: AttendanceStatus) -> CalendarEvent {
+            CalendarEvent(
+                accountID: SampleData.workCalendar.accountID, id: try! EventID(id), calendarID: SampleData.workCalendar.calendarID,
+                title: title,
+                schedule: .allDay(try! DayRange(start: SampleData.day(2026, 10, day), dayCount: days, calendar: SampleData.calendar)),
+                attendance: attendance
+            )
+        }
+        let extra = [
+            allDay("allday-needs-response", "未回答の研修", from: 25, days: 2, attendance: .needsAction),
+            allDay("allday-declined", "辞退した懇親会", from: 26, days: 1, attendance: .declined),
+        ]
+        let fixture = Fixture(events: SampleData.monthViewEvents + extra, displayMode: .month)
+        fixture.popover.reload()
+        await fixture.popover.waitForLoad()
+        fixture.popover.showSchedule(of: SampleData.day(2026, 10, 26))
+        try await render(popoverView(fixture), appearance: appearance, to: output(name))
+    }
     do {
         // 予定のない日。
         let fixture = await loadedMonth()
