@@ -46,7 +46,7 @@ import Testing
         await viewModel.waitForLoad()
         let invitation = try #require(viewModel.selectedSection.rows.first { $0.title == "新機能の企画会議" })
         #expect(invitation.attendance == .needsResponse)
-        #expect(invitation.accessibilityLabel.hasSuffix("未回答"))
+        #expect(invitation.accessibilityLabel == "\(invitation.timeText)、新機能の企画会議、会議室 B、未回答")
     }
 
     @Test func 日の欄のブロックと終日の行は辞退と未回答を持つ() async throws {

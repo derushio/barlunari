@@ -63,9 +63,9 @@ public struct AgendaRowState: Identifiable, Equatable, Sendable {
     public let hasMeetingURL: Bool
     public let attendance: ListedAttendance
 
-    /// VoiceOver に読ませる文。時刻、タイトル、出欠の順。
+    /// VoiceOver に読ませる文。時刻、タイトル、場所、出欠の順。
     public var accessibilityLabel: String {
-        [timeText, title, attendance.label].compactMap { $0 }.joined(separator: "、")
+        [timeText, title, location, attendance.label].compactMap { $0 }.joined(separator: "、")
     }
 }
 

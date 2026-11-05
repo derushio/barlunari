@@ -314,6 +314,18 @@ import Testing
         #expect(viewModel.eventDetail?.rsvp?.current == .declined)
     }
 
+    @Test func 読み直しの結果にない辞退した予定は詳細を閉じたら戻らない() async throws {
+        let harness = Harness()
+        let viewModel = await openInvitation(harness)
+        await viewModel.respond(.declined)
+        await reload(harness, viewModel, returning: SampleData.events.filter { $0.id != invitation.id })
+
+        viewModel.closeDetail()
+        viewModel.showDetail(of: invitation.id)
+
+        #expect(viewModel.eventDetail == nil)
+    }
+
     @Test func 辞退以外で回答した予定が読み直しで消えたら一覧に戻る() async throws {
         let harness = Harness()
         let viewModel = await openInvitation(harness)
