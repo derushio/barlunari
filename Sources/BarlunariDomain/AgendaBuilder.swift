@@ -8,24 +8,29 @@ public struct AgendaBuilder: Sendable {
     ///   - visibleCalendars: 表示するカレンダー。これに含まれないカレンダーの予定は除く。
     ///   - accountOrder: アカウントの並び順。同じ予定が複数のアカウントから来たとき、先のアカウントの予定を残す。
     ///     含まれないアカウントは最後に回し、その中は `AccountID` の順にする。
+    ///   - includesDeclined: `false` なら、自分が辞退した予定を除く。`true` なら残す。
     ///   - range: 返す日の範囲。予定のない日も `DayAgenda` を返す。
     ///
     /// 祝日カレンダーや招待された会議は、複数のアカウントのカレンダーに別々に現れ、iCalendar の UID と日時が同じになる。
     /// UID と日時が同じ予定は 1 件にし、アカウントの並び順で先の予定を残す。同じアカウントの中では、入力で先の予定を残す。
     /// UID を持たない予定は同じ予定かどうか判定できないため、除去の対象にしない。
     /// 表示するカレンダーの絞り込みの後に除くので、先のアカウントのカレンダーを非表示にしていれば、後のアカウントの予定が残る。
-    /// 辞退した予定も一覧に残す。見た目の区別は表示側が行う。
+    /// 辞退した予定の絞り込みは、重複の除去の後に行う。先のアカウントの予定が辞退で、後のアカウントの同じ予定が承諾でも、
+    /// 残るのは先のアカウントの予定なので、`includesDeclined` が `false` ならその予定は現れない。
+    /// `includesDeclined` が `true` のときは辞退した予定も残し、見た目の区別は表示側が行う。
     public func build(
         events: [CalendarEvent],
         visibleCalendars: Set<UserCalendar.Identity>,
         accountOrder: [AccountID],
+        includesDeclined: Bool,
         range: DayRange,
         calendar: Calendar
     ) -> [DayAgenda] {
-        let candidates = Self.removingDuplicates(
+        let unique = Self.removingDuplicates(
             from: events.filter { visibleCalendars.contains($0.calendarIdentity) },
             accountOrder: accountOrder
         )
+        let candidates = includesDeclined ? unique : unique.filter { $0.attendance != .declined }
         let days = range.days(calendar: calendar)
         // 夏時間の日は 24 時間とは限らないため、各日の終端は翌日の 0:00 から求める。
         let boundaries = days.map { $0.startDate(in: calendar) } + [range.end.startDate(in: calendar)]

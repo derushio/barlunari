@@ -40,11 +40,11 @@ import Testing
 
     func build(
         _ events: [CalendarEvent], visible: Set<CalendarID>? = nil, accounts: [AccountID]? = nil,
-        from start: CalendarDay, days: Int
+        includesDeclined: Bool = true, from start: CalendarDay, days: Int
     ) -> [DayAgenda] {
         builder.build(
             events: events, visibleCalendars: identities(visible ?? [work, personal], accounts: accounts),
-            accountOrder: accounts ?? [accountA],
+            accountOrder: accounts ?? [accountA], includesDeclined: includesDeclined,
             range: TestSupport.range(start, days: days), calendar: calendar
         )
     }
@@ -95,7 +95,7 @@ import Testing
         let tokyo = build([event], from: TestSupport.day(2026, 10, 24), days: 2)
         #expect(tokyo.map { titles($0) } == [[], ["早朝"]])
         let inUTC = builder.build(
-            events: [event], visibleCalendars: identities([work]), accountOrder: [accountA],
+            events: [event], visibleCalendars: identities([work]), accountOrder: [accountA], includesDeclined: true,
             range: TestSupport.range(TestSupport.day(2026, 10, 24), days: 2, calendar: utc), calendar: utc
         )
         #expect(inUTC.map { titles($0) } == [["早朝"], []])
@@ -110,6 +110,39 @@ import Testing
         ]
         let result = build(events, from: TestSupport.day(2026, 10, 24), days: 1)
         #expect(titles(result[0]) == ["終日辞退", "参加", "辞退", "未回答"])
+    }
+
+    @Test func 辞退した予定を含めない設定なら辞退した予定だけを除く() {
+        let events = [
+            timed("1", "参加", from: TestSupport.date(2026, 10, 24, 10, 0), to: TestSupport.date(2026, 10, 24, 11, 0)),
+            timed("2", "辞退", from: TestSupport.date(2026, 10, 24, 12, 0), to: TestSupport.date(2026, 10, 24, 13, 0), attendance: .declined),
+            allDay("3", "終日辞退", from: TestSupport.day(2026, 10, 24), days: 2, attendance: .declined),
+            timed("4", "未回答", from: TestSupport.date(2026, 10, 24, 14, 0), to: TestSupport.date(2026, 10, 24, 15, 0), attendance: .needsAction),
+            allDay("5", "終日", from: TestSupport.day(2026, 10, 24), days: 1),
+        ]
+        let result = build(events, includesDeclined: false, from: TestSupport.day(2026, 10, 24), days: 2)
+        #expect(titles(result[0]) == ["終日", "参加", "未回答"])
+        #expect(result[1].events.isEmpty)
+    }
+
+    @Test func 辞退した予定を含める設定なら辞退した予定を残す() {
+        let events = [
+            timed("2", "辞退", from: TestSupport.date(2026, 10, 24, 12, 0), to: TestSupport.date(2026, 10, 24, 13, 0), attendance: .declined),
+        ]
+        let result = build(events, includesDeclined: true, from: TestSupport.day(2026, 10, 24), days: 1)
+        #expect(titles(result[0]) == ["辞退"])
+    }
+
+    @Test func 辞退した予定の絞り込みは重複の除去の後に行う() {
+        // 先のアカウントの予定が辞退で、後のアカウントの同じ予定が承諾。重複の除去で残るのは先のアカウントの予定なので、
+        // 絞り込みを先にすると後のアカウントの予定が残ってしまう。除去の後に絞り込むと、予定は現れない。
+        let events = [
+            timed("a-1", "会議", from: tenToEleven.0, to: tenToEleven.1, account: accountA, attendance: .declined, uid: "u"),
+            timed("b-1", "会議", from: tenToEleven.0, to: tenToEleven.1, account: accountB, attendance: .accepted, uid: "u"),
+        ]
+        let order = [accountA, accountB]
+        #expect(build(events, accounts: order, includesDeclined: false, from: oct24, days: 1)[0].events.isEmpty)
+        #expect(build(events, accounts: order, includesDeclined: true, from: oct24, days: 1)[0].events.map(\.accountID) == [accountA])
     }
 
     @Test func excludesHiddenCalendars() {
@@ -168,7 +201,7 @@ import Testing
         )
         let range = TestSupport.range(TestSupport.day(2026, 11, 1), days: 2, calendar: newYork)
         let result = builder.build(
-            events: [event], visibleCalendars: identities([work]), accountOrder: [accountA], range: range, calendar: newYork
+            events: [event], visibleCalendars: identities([work]), accountOrder: [accountA], includesDeclined: true, range: range, calendar: newYork
         )
         #expect(result.map { titles($0) } == [["夜"], []])
     }
@@ -246,7 +279,8 @@ import Testing
         ]
         let result = builder.build(
             events: events, visibleCalendars: identities([work], accounts: [accountB, accountC]),
-            accountOrder: [accountA], range: TestSupport.range(oct24, days: 1), calendar: calendar
+            accountOrder: [accountA], includesDeclined: true,
+            range: TestSupport.range(oct24, days: 1), calendar: calendar
         )
         #expect(result[0].events.map(\.accountID) == [accountB])
     }
@@ -297,7 +331,8 @@ import Testing
         ]
         let result = builder.build(
             events: events, visibleCalendars: [UserCalendar.Identity(accountID: accountB, calendarID: work)],
-            accountOrder: [accountA, accountB], range: TestSupport.range(oct24, days: 1), calendar: calendar
+            accountOrder: [accountA, accountB], includesDeclined: true,
+            range: TestSupport.range(oct24, days: 1), calendar: calendar
         )
         #expect(result[0].events.map(\.accountID) == [accountB])
     }
