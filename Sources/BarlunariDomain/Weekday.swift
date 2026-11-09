@@ -7,12 +7,4 @@ public enum Weekday: Int, CaseIterable, Sendable {
     case thursday
     case friday
     case saturday
-
-    /// `Calendar.firstWeekday` の値から作る。1 から 7 の範囲外なら `DomainError.invalidWeekday` を投げる。
-    public init(calendarValue: Int) throws {
-        guard let weekday = Weekday(rawValue: calendarValue) else {
-            throw DomainError.invalidWeekday(calendarValue)
-        }
-        self = weekday
-    }
 }

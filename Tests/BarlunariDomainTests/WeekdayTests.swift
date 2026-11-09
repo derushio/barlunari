@@ -9,11 +9,7 @@ import Testing
         #expect(Weekday.allCases.map(\.rawValue) == Array(1...7))
     }
 
-    @Test(arguments: 1...7) func 暦の値から曜日を作れる(value: Int) throws {
-        #expect(try Weekday(calendarValue: value).rawValue == value)
-    }
-
-    @Test(arguments: [0, 8, -1, 100]) func 範囲外の値は不正な曜日として投げる(value: Int) {
-        #expect(throws: DomainError.invalidWeekday(value)) { try Weekday(calendarValue: value) }
+    @Test(arguments: [0, 8, -1]) func 範囲外の値からは曜日を作らない(value: Int) {
+        #expect(Weekday(rawValue: value) == nil)
     }
 }
