@@ -1,3 +1,5 @@
+import BarlunariDomain
+
 public struct GetLaunchAtLoginUseCase: Sendable {
     private let service: any LaunchAtLoginService
 
@@ -69,5 +71,31 @@ public struct SaveShowDeclinedEventsUseCase: Sendable {
 
     public func execute(_ show: Bool) {
         store.save(show)
+    }
+}
+
+public struct LoadFirstWeekdayUseCase: Sendable {
+    private let store: any FirstWeekdayStore
+
+    public init(store: any FirstWeekdayStore) {
+        self.store = store
+    }
+
+    /// 保存した曜日。保存がなければ `nil`（システムの設定に従う）。
+    public func execute() -> Weekday? {
+        store.load()
+    }
+}
+
+public struct SaveFirstWeekdayUseCase: Sendable {
+    private let store: any FirstWeekdayStore
+
+    public init(store: any FirstWeekdayStore) {
+        self.store = store
+    }
+
+    /// `nil` なら保存を消し、システムの設定に従う。
+    public func execute(_ weekday: Weekday?) {
+        store.save(weekday)
     }
 }
