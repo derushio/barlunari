@@ -102,6 +102,9 @@ struct Harness {
     let launchAtLogin: FakeLaunchAtLoginService
     let displayModeStore: InMemoryDisplayModeStore
     let showDeclinedEventsStore: InMemoryShowDeclinedEventsStore
+    let firstWeekdayStore: InMemoryFirstWeekdayStore
+    /// ポップオーバーと予定の読み込みに渡す、保存した週の開始曜日で暦を置き換える `DateProvider`。`dateProvider` を包む。
+    let overridingDateProvider: FirstWeekdayOverridingDateProvider
 
     init(
         status: CalendarAuthorizationStatus = .fullAccess,
@@ -116,6 +119,7 @@ struct Harness {
         dateProvider: MutableDateProvider = MutableDateProvider(),
         displayMode: CalendarDisplayMode? = nil,
         showDeclinedEvents: Bool? = nil,
+        firstWeekday: Weekday? = nil,
         responder: FakeEventResponder = FakeEventResponder(),
         calendarAppOpener: FakeCalendarAppOpener = FakeCalendarAppOpener()
     ) {
@@ -123,6 +127,8 @@ struct Harness {
         self.calendarAppOpener = calendarAppOpener
         displayModeStore = InMemoryDisplayModeStore(mode: displayMode)
         showDeclinedEventsStore = InMemoryShowDeclinedEventsStore(value: showDeclinedEvents)
+        firstWeekdayStore = InMemoryFirstWeekdayStore(value: firstWeekday)
+        overridingDateProvider = FirstWeekdayOverridingDateProvider(base: dateProvider, store: firstWeekdayStore)
         eventRepository = ScriptedEventRepository(events: events, error: eventError)
         var hidden = CalendarVisibility()
         hiddenCalendars.forEach { hidden.hide($0.id) }
@@ -144,14 +150,14 @@ struct Harness {
                 eventRepository: eventRepository,
                 visibilityRepository: visibility,
                 showDeclinedEventsStore: showDeclinedEventsStore,
-                dateProvider: dateProvider
+                dateProvider: overridingDateProvider
             ),
             requestCalendarAccess: requestAccess,
             openSystemSettings: openSystemSettings,
             refreshCalendarSources: RefreshCalendarSourcesUseCase(refresher: sourceRefresher),
             respondToEvent: RespondToEventUseCase(responder: responder),
             openEventInCalendarApp: OpenEventInCalendarAppUseCase(opener: calendarAppOpener),
-            dateProvider: dateProvider,
+            dateProvider: overridingDateProvider,
             urlOpener: opener,
             changeNotifier: notifier,
             loadDisplayMode: LoadDisplayModeUseCase(store: displayModeStore),
@@ -168,6 +174,8 @@ struct Harness {
             setLaunchAtLogin: SetLaunchAtLoginUseCase(service: launchAtLogin),
             loadShowDeclinedEvents: LoadShowDeclinedEventsUseCase(store: showDeclinedEventsStore),
             saveShowDeclinedEvents: SaveShowDeclinedEventsUseCase(store: showDeclinedEventsStore),
+            loadFirstWeekday: LoadFirstWeekdayUseCase(store: firstWeekdayStore),
+            saveFirstWeekday: SaveFirstWeekdayUseCase(store: firstWeekdayStore),
             listCalendars: ListCalendarsUseCase(
                 authorizer: authorizer, calendarRepository: calendarRepository, visibilityRepository: visibility
             ),

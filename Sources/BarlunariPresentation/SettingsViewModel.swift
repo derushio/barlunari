@@ -22,6 +22,8 @@ public final class SettingsViewModel {
     public private(set) var launchAtLoginError: String?
     /// 辞退した予定を、ポップオーバーの一覧・日の欄・月のマス目に出すか。
     public private(set) var showDeclinedEvents = ShowDeclinedEventsDefault.value
+    /// 週の始まりの曜日。`nil` はシステムの設定に従う。
+    public private(set) var firstWeekday: Weekday?
 
     // カレンダー
     public private(set) var calendars: [CalendarListItem] = []
@@ -40,6 +42,8 @@ public final class SettingsViewModel {
     private let setLaunchAtLoginUseCase: SetLaunchAtLoginUseCase
     private let loadShowDeclinedEvents: LoadShowDeclinedEventsUseCase
     private let saveShowDeclinedEvents: SaveShowDeclinedEventsUseCase
+    private let loadFirstWeekday: LoadFirstWeekdayUseCase
+    private let saveFirstWeekday: SaveFirstWeekdayUseCase
     private let listCalendars: ListCalendarsUseCase
     private let setCalendarVisibility: SetCalendarVisibilityUseCase
     private let requestCalendarAccess: RequestCalendarAccessUseCase
@@ -51,6 +55,8 @@ public final class SettingsViewModel {
         setLaunchAtLogin: SetLaunchAtLoginUseCase,
         loadShowDeclinedEvents: LoadShowDeclinedEventsUseCase,
         saveShowDeclinedEvents: SaveShowDeclinedEventsUseCase,
+        loadFirstWeekday: LoadFirstWeekdayUseCase,
+        saveFirstWeekday: SaveFirstWeekdayUseCase,
         listCalendars: ListCalendarsUseCase,
         setCalendarVisibility: SetCalendarVisibilityUseCase,
         requestCalendarAccess: RequestCalendarAccessUseCase,
@@ -62,6 +68,8 @@ public final class SettingsViewModel {
         self.setLaunchAtLoginUseCase = setLaunchAtLogin
         self.loadShowDeclinedEvents = loadShowDeclinedEvents
         self.saveShowDeclinedEvents = saveShowDeclinedEvents
+        self.loadFirstWeekday = loadFirstWeekday
+        self.saveFirstWeekday = saveFirstWeekday
         self.listCalendars = listCalendars
         self.setCalendarVisibility = setCalendarVisibility
         self.requestCalendarAccess = requestCalendarAccess
@@ -89,6 +97,7 @@ public final class SettingsViewModel {
     public func load() async {
         launchAtLogin = await getLaunchAtLogin.execute()
         showDeclinedEvents = loadShowDeclinedEvents.execute()
+        firstWeekday = loadFirstWeekday.execute()
         observedRevision = changeNotifier.revision
         await reloadCalendars()
     }
@@ -130,6 +139,15 @@ public final class SettingsViewModel {
         guard show != showDeclinedEvents else { return }
         showDeclinedEvents = show
         saveShowDeclinedEvents.execute(show)
+        notifyChange()
+    }
+
+    /// 週の始まりを保存して変更を通知する。`nil` は保存を消し、システムの設定に従う。
+    /// 開いているポップオーバーと、閉じているポップオーバーは、通知を受けて週の並びを作り直す。
+    public func setFirstWeekday(_ weekday: Weekday?) {
+        guard weekday != firstWeekday else { return }
+        firstWeekday = weekday
+        saveFirstWeekday.execute(weekday)
         notifyChange()
     }
 

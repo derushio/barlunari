@@ -51,11 +51,13 @@ struct Fixture {
         events sampleEvents: [CalendarEvent] = SampleData.events,
         displayMode: CalendarDisplayMode = .compact,
         showDeclinedEvents: Bool? = nil,
+        firstWeekday: Weekday? = nil,
         rsvpFailure: (any Error)? = nil,
         rsvpOutcome: EventResponseOutcome = .saved
     ) {
         responder = FakeEventResponder(failure: rsvpFailure, outcome: rsvpOutcome)
-        let dateProvider = FixedDateProvider()
+        let firstWeekdayStore = InMemoryFirstWeekdayStore(value: firstWeekday)
+        let dateProvider = FirstWeekdayOverridingDateProvider(base: FixedDateProvider(), store: firstWeekdayStore)
         let authorizer = FakeCalendarAccessAuthorizer(status: status)
         let calendarRepository = InMemoryCalendarRepository(accounts: accounts, calendars: calendars)
         let eventRepository = SnapshotEventRepository(events: sampleEvents, error: eventError)
@@ -98,6 +100,8 @@ struct Fixture {
             setLaunchAtLogin: SetLaunchAtLoginUseCase(service: launchAtLogin),
             loadShowDeclinedEvents: LoadShowDeclinedEventsUseCase(store: showDeclinedEventsStore),
             saveShowDeclinedEvents: SaveShowDeclinedEventsUseCase(store: showDeclinedEventsStore),
+            loadFirstWeekday: LoadFirstWeekdayUseCase(store: firstWeekdayStore),
+            saveFirstWeekday: SaveFirstWeekdayUseCase(store: firstWeekdayStore),
             listCalendars: ListCalendarsUseCase(
                 authorizer: authorizer, calendarRepository: calendarRepository, visibilityRepository: visibility
             ),

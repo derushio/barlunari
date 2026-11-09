@@ -62,6 +62,22 @@ private struct GeneralSettingsTab: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+            Section {
+                Picker("週の始まり", selection: Binding(
+                    get: { viewModel.firstWeekday },
+                    set: { viewModel.setFirstWeekday($0) }
+                )) {
+                    Text("システムの設定に従う").tag(Weekday?.none)
+                    Divider()
+                    ForEach(Weekday.allCases, id: \.self) { weekday in
+                        Text(weekday.displayName).tag(Weekday?.some(weekday))
+                    }
+                }
+                .pickerStyle(.menu)
+                Text("月のマス目とコンパクト表示の週の先頭の曜日です。「システムの設定に従う」では、「言語と地域」の「週の最初の曜日」に従います。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
         }
         .formStyle(.grouped)
     }

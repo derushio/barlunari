@@ -90,6 +90,8 @@ struct LaunchFailure: Error {}
             setLaunchAtLogin: SetLaunchAtLoginUseCase(service: harness.launchAtLogin),
             loadShowDeclinedEvents: LoadShowDeclinedEventsUseCase(store: harness.showDeclinedEventsStore),
             saveShowDeclinedEvents: SaveShowDeclinedEventsUseCase(store: harness.showDeclinedEventsStore),
+            loadFirstWeekday: LoadFirstWeekdayUseCase(store: harness.firstWeekdayStore),
+            saveFirstWeekday: SaveFirstWeekdayUseCase(store: harness.firstWeekdayStore),
             listCalendars: ListCalendarsUseCase(
                 authorizer: harness.authorizer,
                 calendarRepository: InMemoryCalendarRepository(error: CocoaError(.fileReadUnknown)),

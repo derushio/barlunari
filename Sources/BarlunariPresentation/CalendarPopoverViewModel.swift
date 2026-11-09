@@ -48,6 +48,8 @@ public final class CalendarPopoverViewModel {
     public private(set) var agendaScrollRequest: AgendaScrollRequest?
     /// View に月のマス目のスクロールを求める要求。ViewModel が表示月を変えたときだけ更新する。利用者のマス目のスクロールでは更新しない。
     public private(set) var gridScrollRequest: GridScrollRequest?
+    /// 週の並びを作り直したが、マス目と一覧の位置をまだ合わせ直していないか。`systemCalendarDidChange()` が合わせ直して戻す。
+    @ObservationIgnored private var hasUnrealignedTimelineRebuild = false
     /// マス目の週の並び。今日を含む週の前後に固定の数の週を並べ、後から足さない。週の開始曜日が変わったときと、今日を含む週が変わったときだけ作り直す。
     @ObservationIgnored private var timeline: WeekTimeline
 
@@ -225,7 +227,11 @@ public final class CalendarPopoverViewModel {
 
     public var monthTitle: String { formatter.monthTitle(displayedMonth) }
 
-    public var weekdaySymbols: [String] { formatter.weekdaySymbolsFromFirstWeekday() }
+    /// 週の開始曜日から並べた曜日の見出し。週の開始曜日が変わると並びが変わるので、`clockRevision` を読み、作り直しのたびに読み直させる。
+    public var weekdaySymbols: [String] {
+        _ = clockRevision
+        return formatter.weekdaySymbolsFromFirstWeekday()
+    }
 
     /// マス目に並べる週の数。
     public var weekCount: Int { weekTimeline.weekCount }
@@ -560,11 +566,12 @@ public final class CalendarPopoverViewModel {
         }
     }
 
-    /// 日付・タイムゾーン・地域設定が変わったときに呼ぶ。今日が変わっていれば選択日と表示月を今日に戻し、読み込み直す。
+    /// 日付・タイムゾーン・地域設定、または設定画面の「週の始まり」が変わったときに呼ぶ。今日が変わっていれば選択日と表示月を今日に戻し、読み込み直す。
     public func systemCalendarDidChange() {
         clockRevision += 1
         monthImageStore.removeAll()
-        let didRebuildTimeline = rebuildTimelineIfNeeded()
+        let didRebuildTimeline = rebuildTimelineIfNeeded() || hasUnrealignedTimelineRebuild
+        hasUnrealignedTimelineRebuild = false
         if !resetToTodayIfDayChanged(), didRebuildTimeline {
             // 週の番号と日の番号が振り直されたので、選択日が選べる範囲に収まるようにしてから、
             // 表示月と選択日の位置に、マス目と一覧を合わせ直す。
@@ -584,6 +591,11 @@ public final class CalendarPopoverViewModel {
         closeDetail()
         closeCalendarFilter()
         requestSourceSync()
+        // 閉じている間に「週の始まり」が変わっていたら、週の並びと位置を作り直す。
+        if hasFirstWeekdayChanged {
+            systemCalendarDidChange()
+            return
+        }
         if resetToTodayIfDayChanged() {
             reload()
             return
@@ -702,8 +714,15 @@ public final class CalendarPopoverViewModel {
     }
 
     /// 設定画面など他の画面から変更が通知されていれば読み込み直す。自分で起こした変更では読み込み直さない。
+    ///
+    /// 週の開始曜日が変わっていれば、週の並びの作り直しと位置の合わせ直しを行う `systemCalendarDidChange()` を通す。
+    /// 変わっていなければ予定を読み直すだけで、月の画像の記憶は捨てない。
     public func reloadIfChangedElsewhere() {
-        if changeRevision != observedRevision { reload() }
+        if hasFirstWeekdayChanged {
+            systemCalendarDidChange()
+        } else if changeRevision != observedRevision {
+            reload()
+        }
     }
 
     public func openMeeting(of row: AgendaRowState) {
@@ -937,12 +956,21 @@ public final class CalendarPopoverViewModel {
         return timeline
     }
 
+    /// 暦の週の開始曜日が、週の並びを作ったときと変わっているか。
+    ///
+    /// `weekTimeline` は読まれた時点で並びを作り直すので、作り直しが済んだあとも、位置を合わせ直す前なら `true` のままにする。
+    private var hasFirstWeekdayChanged: Bool {
+        hasUnrealignedTimelineRebuild || timeline.firstWeekday != dateProvider.calendar.firstWeekday
+    }
+
     /// 週の開始曜日が変わっていたら、今日を含む週を基準に週の並びを作り直して `true` を返す。
     @discardableResult
     private func rebuildTimelineIfNeeded() -> Bool {
         let firstWeekday = dateProvider.calendar.firstWeekday
         guard timeline.firstWeekday != firstWeekday else { return false }
         timeline = Self.makeTimeline(today: today, firstWeekday: firstWeekday)
+        // 読み出しの途中で作り直すことがあるので、`systemCalendarDidChange()` が位置を合わせ直すまで覚えておく。
+        hasUnrealignedTimelineRebuild = true
         return true
     }
 

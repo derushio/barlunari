@@ -39,6 +39,7 @@ final class Harness {
     /// 設定画面の ViewModel。ポップオーバーと同じ `DataChangeNotifier` を共有し、設定の変更がポップオーバーの再読み込みにつながる。
     private let settingsViewModel: SettingsViewModel
     private let showDeclinedEventsStore: InMemoryShowDeclinedEventsStore
+    private let firstWeekdayStore: InMemoryFirstWeekdayStore
     /// `settings open` で作る、設定画面のオフスクリーンのウインドウ。開いている間だけ持つ。
     private var settingsWindow: NSWindow?
     /// click、hover、scroll、key、screenshot の対象のウインドウ。設定を開いている間は設定画面、そうでなければポップオーバー。
@@ -74,7 +75,10 @@ final class Harness {
     }
 
     init(dataSet: DataSet = .standard) async {
-        let dateProvider = FixedDateProvider()
+        // アプリの AppContainer と同じく、保存した週の開始曜日で暦を置き換える DateProvider で包む。保存先はメモリ。
+        let firstWeekdayStore = InMemoryFirstWeekdayStore()
+        self.firstWeekdayStore = firstWeekdayStore
+        let dateProvider = FirstWeekdayOverridingDateProvider(base: FixedDateProvider(), store: firstWeekdayStore)
         let authorizer = FakeCalendarAccessAuthorizer(status: .fullAccess)
         let calendarRepository = InMemoryCalendarRepository(
             accounts: dataSet == .colorful ? ColorfulSampleData.accounts : SampleData.accounts,
@@ -136,6 +140,8 @@ final class Harness {
             setLaunchAtLogin: SetLaunchAtLoginUseCase(service: launchAtLogin),
             loadShowDeclinedEvents: LoadShowDeclinedEventsUseCase(store: showDeclinedEventsStore),
             saveShowDeclinedEvents: SaveShowDeclinedEventsUseCase(store: showDeclinedEventsStore),
+            loadFirstWeekday: LoadFirstWeekdayUseCase(store: firstWeekdayStore),
+            saveFirstWeekday: SaveFirstWeekdayUseCase(store: firstWeekdayStore),
             listCalendars: listCalendars,
             setCalendarVisibility: setCalendarVisibility,
             requestCalendarAccess: requestCalendarAccess,
@@ -333,7 +339,10 @@ final class Harness {
     private var settingsSummary: String {
         let saved = showDeclinedEventsStore.savedValues.map { $0 ? "on" : "off" }.joined(separator: ",")
         let shown = settingsViewModel.showDeclinedEvents ? "on" : "off"
-        return "操作対象=\(settingsWindow == nil ? "ポップオーバー" : "設定") 辞退した予定を表示=\(shown)(保存=[\(saved)])"
+        let weekday = settingsViewModel.firstWeekday?.displayName ?? "システム"
+        let savedWeekdays = firstWeekdayStore.savedValues.map { $0?.displayName ?? "システム" }.joined(separator: ",")
+        let header = viewModel.weekdaySymbols.joined()
+        return "操作対象=\(settingsWindow == nil ? "ポップオーバー" : "設定") 辞退した予定を表示=\(shown)(保存=[\(saved)]) 週の始まり=\(weekday)(保存=[\(savedWeekdays)]) 曜日の見出し=\(header)"
     }
 
     var stateSummary: String {
