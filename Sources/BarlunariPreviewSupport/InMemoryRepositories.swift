@@ -118,6 +118,32 @@ public final class InMemoryShowDeclinedEventsStore: ShowDeclinedEventsStore {
     public var savedValues: [Bool] { state.withLock { $0.savedValues } }
 }
 
+/// 保存した値を記録するインメモリの「週の始まり」の保存先。`nil` はシステムの設定に従うことを表す。
+public final class InMemoryFirstWeekdayStore: FirstWeekdayStore {
+    private struct State {
+        var value: Weekday?
+        var savedValues: [Weekday?] = []
+    }
+
+    private let state: Mutex<State>
+
+    public init(value: Weekday? = nil) {
+        state = Mutex(State(value: value))
+    }
+
+    public func load() -> Weekday? { state.withLock { $0.value } }
+
+    public func save(_ weekday: Weekday?) {
+        state.withLock {
+            $0.value = weekday
+            $0.savedValues.append(weekday)
+        }
+    }
+
+    /// `save` で保存した値を、呼ばれた順に並べたもの。初期値は含まない。`nil` は保存を消した呼び出し。
+    public var savedValues: [Weekday?] { state.withLock { $0.savedValues } }
+}
+
 /// サーバーにだけある予定を持てるインメモリの予定リポジトリ。
 ///
 /// `stageRemote(_:)` で足した予定は、`pullRemote()` が呼ばれるまでローカルに届かず、取得にも含まれない。

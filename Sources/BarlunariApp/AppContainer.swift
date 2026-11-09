@@ -11,7 +11,10 @@ final class AppContainer {
     let settingsViewModel: SettingsViewModel
 
     init() {
-        let dateProvider = SystemDateProvider()
+        // 設定の「週の始まり」を保存する。ポップオーバーと設定画面に同じ保存先を渡す。
+        let firstWeekdayStore = UserDefaultsFirstWeekdayStore()
+        // 保存した曜日があれば、システムの暦の週の開始曜日を置き換える。暦を使うすべての処理が同じ日付の提供元を使う。
+        let dateProvider = FirstWeekdayOverridingDateProvider(base: SystemDateProvider(), store: firstWeekdayStore)
         // EKEventStore は 1 つだけ持つ。カレンダー・予定・許可・同期・出欠の回答の 5 つのポートを同じインスタンスが実装する。
         let calendarStore = EventKitCalendarStore(dateProvider: dateProvider)
         let urlOpener = WorkspaceURLOpener()
@@ -63,6 +66,8 @@ final class AppContainer {
             setLaunchAtLogin: SetLaunchAtLoginUseCase(service: launchAtLoginService),
             loadShowDeclinedEvents: LoadShowDeclinedEventsUseCase(store: showDeclinedEventsStore),
             saveShowDeclinedEvents: SaveShowDeclinedEventsUseCase(store: showDeclinedEventsStore),
+            loadFirstWeekday: LoadFirstWeekdayUseCase(store: firstWeekdayStore),
+            saveFirstWeekday: SaveFirstWeekdayUseCase(store: firstWeekdayStore),
             listCalendars: listCalendars,
             setCalendarVisibility: setCalendarVisibility,
             requestCalendarAccess: requestCalendarAccess,
