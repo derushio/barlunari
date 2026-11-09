@@ -103,8 +103,16 @@ final class Driver {
                 harness.setAppearance(dark: words[1] == "dark")
                 label = "appearance-\(words[1])"
             case "settings":
-                guard words.count == 2, ["open", "close"].contains(words[1]) else { throw DriverError.message("使い方: settings open|close") }
-                if words[1] == "open" { try await harness.openSettings() } else { try harness.closeSettings() }
+                guard words.count >= 2, ["open", "close", "weekday"].contains(words[1]) else {
+                    throw DriverError.message("使い方: settings open|close|weekday <システム|曜日の名前>")
+                }
+                switch words[1] {
+                case "open": try await harness.openSettings()
+                case "close": try harness.closeSettings()
+                default:
+                    guard words.count == 3 else { throw DriverError.message("使い方: settings weekday <システム|曜日の名前>") }
+                    try await harness.selectFirstWeekday(named: words[2])
+                }
                 label = "settings-\(words[1])"
             case "hide":
                 harness.hidePanel()

@@ -198,6 +198,23 @@ final class Harness {
         await settle()
     }
 
+    /// 設定画面の「週の始まり」を選ぶ。名前は `システム`（システムの設定に従う）か、`月曜日` のような曜日の名前。
+    ///
+    /// SwiftUI の `Picker`（`.pickerStyle(.menu)`）は、`click` で押すと `NSMenu` のトラッキングが始まって操作ツールが戻らなくなる。
+    /// 設定画面のビューの階層にある `NSPopUpButton` は、表示用で、項目も action も target も持たない。項目を選ぶ経路が外から届かないので、
+    /// コントロールを通さず、`Picker` の `Binding` の set が呼ぶのと同じ `SettingsViewModel.setFirstWeekday(_:)` を呼ぶ。
+    func selectFirstWeekday(named name: String) async throws {
+        guard settingsWindow != nil else { throw DriverError.message("設定は開いていない。開くには settings open") }
+        if name == "システム" {
+            settingsViewModel.setFirstWeekday(nil)
+        } else if let weekday = Weekday.allCases.first(where: { $0.displayName == name }) {
+            settingsViewModel.setFirstWeekday(weekday)
+        } else {
+            throw DriverError.message("曜日の名前が不正である: \(name)（システム、日曜日から土曜日）")
+        }
+        await settle()
+    }
+
     /// 設定画面を閉じ、操作の対象をポップオーバーに戻す。
     func closeSettings() throws {
         guard let window = settingsWindow else { throw DriverError.message("設定は開いていない。開くには settings open") }
