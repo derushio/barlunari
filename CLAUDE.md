@@ -95,6 +95,11 @@ BarlunariApp ──► Presentation ──► Application ──► Domain
 - `main` ブランチで進め、小さく頻繁にコミットします
 - Conventional Commits 形式で、説明は日本語にします。例は `feat(domain): CalendarDay を追加` です
 
+### ship
+
+- ship は、GitHub の `derushio/barlunari` の `main` へのマージまでを指します
+- App Store には配信しません。App Store Connect への提出、公証、配布用の署名は行いません
+
 ### 文章と用語
 
 - ユーザーに見せる文字列とドキュメントは日本語で書きます
