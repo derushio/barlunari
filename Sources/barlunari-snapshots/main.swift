@@ -407,6 +407,19 @@ func runSnapshots(outputDirectory: URL) async throws {
         fixture.popover.showSchedule(of: SampleData.day(2026, 10, day))
         try await render(popoverView(fixture), appearance: appearance, to: output(name))
     }
+    // 週の始まりを月曜日にした月表示とコンパクト表示。曜日の見出し、マス目、日曜（赤）と土曜（青）の列が月曜始まりで並ぶ。
+    do {
+        let fixture = Fixture(events: SampleData.monthViewEvents, displayMode: .month, firstWeekday: .monday)
+        fixture.popover.reload()
+        await fixture.popover.waitForLoad()
+        try await render(popoverView(fixture), appearance: .aqua, to: output("month-first-weekday-monday-light"))
+    }
+    do {
+        let fixture = Fixture(firstWeekday: .monday)
+        fixture.popover.reload()
+        await fixture.popover.waitForLoad()
+        try await render(popoverView(fixture), appearance: .aqua, to: output("popover-first-weekday-monday-light"))
+    }
     // 「辞退した予定を表示」をオフにした月表示。10 月 24 日の日の欄から辞退した予定が消え、月のマス目にも出ない。
     do {
         let fixture = Fixture(events: SampleData.monthViewEvents, displayMode: .month, showDeclinedEvents: false)
@@ -501,6 +514,11 @@ func runSnapshots(outputDirectory: URL) async throws {
     let settingsDeclinedOff = Fixture(showDeclinedEvents: false)
     await settingsDeclinedOff.settings.load()
     try await render(SettingsView(viewModel: settingsDeclinedOff.settings), appearance: .aqua, to: output("settings-general-declined-off"))
+
+    // 「週の始まり」に月曜日を選んで保存したあとに開いた一般タブ。
+    let settingsMonday = Fixture(firstWeekday: .monday)
+    await settingsMonday.settings.load()
+    try await render(SettingsView(viewModel: settingsMonday.settings), appearance: .aqua, to: output("settings-general-first-weekday-monday"))
 
     // 設定のカレンダータブの案内。
     let settingsGuides: [(String, Fixture)] = [
