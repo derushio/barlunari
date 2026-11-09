@@ -24,13 +24,13 @@ Barlunari は戦術的 DDD のレイヤードアーキテクチャで作りま�
 
 ## 型の判断基準
 
-- 値オブジェクト: 同一性を持たず、値が同じなら同じものとして扱う型です。不変条件は生成時に検証し、違反したら `DomainError` を投げます。`CalendarDay`、`CalendarMonth`、`DayRange`、`AccountID`、`CalendarID`、`EventID`、`CalendarColor`、`EventSchedule`、`AttendanceStatus`、`EventParticipant`、`WeekTimeline` がこれに当たります。`EventParticipant` は、名前とメールアドレスのどちらかを必須にする不変条件を生成時に検証します。値に関する判定は値オブジェクトに持たせます。例は `EventSchedule` の `hasEnded` と `span` です
+- 値オブジェクト: 同一性を持たず、値が同じなら同じものとして扱う型です。不変条件は生成時に検証し、違反したら `DomainError` を投げます。`CalendarDay`、`CalendarMonth`、`DayRange`、`AccountID`、`CalendarID`、`EventID`、`CalendarColor`、`Weekday`、`EventSchedule`、`AttendanceStatus`、`EventParticipant`、`WeekTimeline` がこれに当たります。`EventParticipant` は、名前とメールアドレスのどちらかを必須にする不変条件を生成時に検証します。値に関する判定は値オブジェクトに持たせます。例は `EventSchedule` の `hasEnded` と `span` です
 - エンティティ: 時間が経って属性が変わっても同じものとして追跡する型です。同一性を表す ID で等価性を判定します。`UserAccount` は `AccountID` で、`UserCalendar` は `AccountID` と `CalendarID` の組で、`CalendarEvent` は `AccountID`、`CalendarID`、`EventID` の組で判定します。アカウントの名前は変わりうるので、同一性に使いません。`CalendarID` だけでは、アカウントをまたいで区別できません
 - 集約: 不変条件を守る整合性の境界です。外からは集約ルートの操作だけで状態を変えます。`CalendarVisibility` が集約ルートで、`hide(_:)`、`show(_:)`、`isVisible(_:)` で操作します。いずれも `UserCalendar.Identity` を受けます
 - ドメインサービス: 1 つのエンティティや値オブジェクトに属さない業務ルールです。状態を持たず、入力から結果を計算します。`AgendaBuilder` がこれに当たり、日ごとの予定を作る `build` と、日ごとの色を求める `colorsByDay` を持ちます。iCalendar の UID と日時が同じ予定を 1 件にする重複の除去も `build` が行います
 - リポジトリ: 集約やエンティティの取得と保存の抽象です。プロトコルは Domain に置き、実装は Infrastructure に置きます。`CalendarRepository`、`CalendarEventRepository`、`CalendarVisibilityRepository` があります。予定のリポジトリは `UserCalendar.Identity` の集合を受け取り、カレンダーのリポジトリはアカウントとカレンダーを返します。読んでから書き戻す更新は、`CalendarVisibilityRepository.update` のように、リポジトリが原子的に行います
 - ユースケース: 利用者の操作 1 つを表す `struct` で、`func execute(...) async throws` を持ちます。リポジトリとポートを組み合わせ、業務ルールそのものは持ちません。`LoadAgendaUseCase`、`ListCalendarsUseCase`、`RequestCalendarAccessUseCase` などがあります。許可の状態の確認は、ユースケースが行います
-- ポート: Application が必要とする外部サービスの抽象です。プロトコルは Application に置き、実装は Infrastructure に置きます。`CalendarAccessAuthorizer`、`SystemSettingsOpener`、`DateProvider`、`LaunchAtLoginService`、`URLOpener`、`DisplayModeStore`、`ShowDeclinedEventsStore` があります。`EventKitValues.swift` の値のように、Infrastructure の内部だけで使う型は、Application のポートにしません
+- ポート: Application が必要とする外部サービスの抽象です。プロトコルは Application に置き、実装は Infrastructure に置きます。`CalendarAccessAuthorizer`、`SystemSettingsOpener`、`DateProvider`、`LaunchAtLoginService`、`URLOpener`、`DisplayModeStore`、`ShowDeclinedEventsStore`、`FirstWeekdayStore` があります。`FirstWeekdayStore` が保存した曜日で `calendar.firstWeekday` を置き換える処理は、別の `DateProvider` を包む `FirstWeekdayOverridingDateProvider`（Application）の 1 か所だけに置き、`AppContainer` が `SystemDateProvider` を包んで全体に渡します。`EventKitValues.swift` の値のように、Infrastructure の内部だけで使う型は、Application のポートにしません
 
 迷ったときの順序は次のとおりです。
 
