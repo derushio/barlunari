@@ -188,6 +188,10 @@ final class Harness {
         panel.level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.desktopWindow)) - 1)
         panel.collectionBehavior = [.stationary, .ignoresCycle, .transient]
         showPanel()
+        // アプリは NSApp.run() のイベントを処理するたびに updateWindows を呼ぶので、最初のスクロールより前に、ステータスバーの項目のクリックなどで
+        // NSTextInputContext の初期化と WritingToolsUILibrary の読み込みが済んでいる。このツールは run() を回さないので、最初のスクロールの
+        // フレームにその処理（約 60M 命令）が載り、アプリより重く測れる。先に済ませる。
+        NSApplication.shared.updateWindows()
         viewModel.reload()
         await viewModel.waitForLoad()
         countdownViewModel.start()
