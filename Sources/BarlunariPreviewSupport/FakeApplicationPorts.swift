@@ -13,6 +13,24 @@ public struct FixedDateProvider: DateProvider {
     }
 }
 
+/// 時刻を進められる `DateProvider`。ポップオーバーとメニューバーの残り時間が同じ時刻を参照し、時間の経過を再現するために使う。
+public final class AdvancingDateProvider: DateProvider {
+    private let current: Mutex<Date>
+    public let calendar: Calendar
+
+    public init(now: Date = SampleData.now, calendar: Calendar = SampleData.calendar) {
+        self.current = Mutex(now)
+        self.calendar = calendar
+    }
+
+    public var now: Date { current.withLock { $0 } }
+
+    /// 現在時刻を `seconds` 秒進める。
+    public func advance(by seconds: TimeInterval) {
+        current.withLock { $0 = $0.addingTimeInterval(seconds) }
+    }
+}
+
 /// 許可の状態を保持するだけのフェイク。`requestAccess()` は `statusAfterRequest` に状態を変える。
 ///
 /// 状態が `notDetermined` のときだけ状態を変える。許可を求めた回数は `requestCount` に記録する。

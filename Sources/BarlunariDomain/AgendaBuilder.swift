@@ -26,11 +26,12 @@ public struct AgendaBuilder: Sendable {
         range: DayRange,
         calendar: Calendar
     ) -> [DayAgenda] {
-        let unique = Self.removingDuplicates(
-            from: events.filter { visibleCalendars.contains($0.calendarIdentity) },
-            accountOrder: accountOrder
+        let candidates = candidateEvents(
+            from: events,
+            visibleCalendars: visibleCalendars,
+            accountOrder: accountOrder,
+            includesDeclined: includesDeclined
         )
-        let candidates = includesDeclined ? unique : unique.filter { $0.attendance != .declined }
         let days = range.days(calendar: calendar)
         // 夏時間の日は 24 時間とは限らないため、各日の終端は翌日の 0:00 から求める。
         let boundaries = days.map { $0.startDate(in: calendar) } + [range.end.startDate(in: calendar)]
@@ -40,6 +41,22 @@ public struct AgendaBuilder: Sendable {
             let onDay = candidates.filter { Self.occurs($0.schedule, on: day, dayInterval: dayInterval) }
             return DayAgenda(day: day, events: onDay.sorted(by: Self.isOrderedBefore))
         }
+    }
+
+    /// 表示するカレンダーの絞り込み、重複の除去、辞退した予定の絞り込みを、この順に行った予定。日ごとには分けない。
+    ///
+    /// 各引数の意味と規則は `build` と同じである。`build` はこの結果を日ごとに振り分ける。
+    public func candidateEvents(
+        from events: [CalendarEvent],
+        visibleCalendars: Set<UserCalendar.Identity>,
+        accountOrder: [AccountID],
+        includesDeclined: Bool
+    ) -> [CalendarEvent] {
+        let unique = Self.removingDuplicates(
+            from: events.filter { visibleCalendars.contains($0.calendarIdentity) },
+            accountOrder: accountOrder
+        )
+        return includesDeclined ? unique : unique.filter { $0.attendance != .declined }
     }
 
     /// 日ごとの、予定があるカレンダーの色。重複は除き、その日の予定の並び順で最初に現れた順に並べる。

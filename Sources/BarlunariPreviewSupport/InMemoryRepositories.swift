@@ -196,3 +196,27 @@ public final class SyncableEventRepository: CalendarEventRepository {
         return try await InMemoryCalendarEventRepository(events: local).events(in: interval, calendars: calendars)
     }
 }
+
+/// 保存を失敗させられるインメモリの残り時間の対象外の保存先。`setFailure(_:)` で失敗させると、`update` は変更を保存せずに投げる。
+public actor InMemoryCountdownExclusionRepository: CountdownExclusionRepository {
+    private var exclusions: CountdownExclusions
+    private var failure: (any Error)?
+    /// 成功した `update` の回数。
+    public private(set) var updateCount = 0
+
+    public init(exclusions: CountdownExclusions = CountdownExclusions(), error: (any Error)? = nil) {
+        self.exclusions = exclusions
+        self.failure = error
+    }
+
+    /// 以後の `update` を `error` で失敗させる。`nil` で元に戻す。
+    public func setFailure(_ error: (any Error)?) { failure = error }
+
+    public func load() async -> CountdownExclusions { exclusions }
+
+    public func update(_ body: @Sendable (inout CountdownExclusions) -> Void) async throws {
+        if let failure { throw failure }
+        body(&exclusions)
+        updateCount += 1
+    }
+}

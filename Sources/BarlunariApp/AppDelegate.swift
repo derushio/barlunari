@@ -13,6 +13,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let settings = SettingsWindowController(viewModel: container.settingsViewModel)
         let menuBar = MenuBarController(
             viewModel: container.popoverViewModel,
+            countdown: container.countdownViewModel,
             openSettings: { settings.show() },
             quit: { NSApp.terminate(nil) }
         )

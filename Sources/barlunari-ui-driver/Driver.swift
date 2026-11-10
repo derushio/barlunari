@@ -98,6 +98,12 @@ final class Driver {
                 harness.postStoreChanges(count: count)
             case "wake":
                 harness.postWake()
+            case "clock":
+                guard words.count == 2, words[1].hasPrefix("+"), let seconds = Double(words[1].dropFirst()), seconds > 0 else {
+                    throw DriverError.message("使い方: clock +<秒>")
+                }
+                await harness.advanceClock(by: seconds)
+                label = "clock-\(words[1].dropFirst())"
             case "appearance":
                 guard words.count == 2, ["light", "dark"].contains(words[1]) else { throw DriverError.message("使い方: appearance light|dark") }
                 harness.setAppearance(dark: words[1] == "dark")

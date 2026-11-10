@@ -15,6 +15,7 @@ private let panelLog = Logger(subsystem: Bundle.main.bundleIdentifier ?? "Barlun
 @MainActor
 public final class MenuBarController: NSObject {
     private let viewModel: CalendarPopoverViewModel
+    private let countdown: MenuBarCountdownViewModel
     private let openSettingsAction: @MainActor () -> Void
     private let quitAction: @MainActor () -> Void
     private let screenArea = PopoverScreenArea(visibleFrame: CGRect(x: 0, y: 0, width: 1440, height: 900))
@@ -28,25 +29,28 @@ public final class MenuBarController: NSObject {
 
     public init(
         viewModel: CalendarPopoverViewModel,
+        countdown: MenuBarCountdownViewModel,
         openSettings: @escaping @MainActor () -> Void,
         quit: @escaping @MainActor () -> Void
     ) {
         self.viewModel = viewModel
+        self.countdown = countdown
         self.openSettingsAction = openSettings
         self.quitAction = quit
         super.init()
     }
 
-    /// メニューバーに項目を出し、パネルを組み立てる。
+    /// メニューバーに項目を出し、パネルを組み立て、次の予定までの残り時間の表示を始める。
     public func install() {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let button = item.button {
-            button.image = NSImage(systemSymbolName: MenuBarIcon.symbolName, accessibilityDescription: MenuBarIcon.accessibilityLabel)
-            button.setAccessibilityLabel(MenuBarIcon.accessibilityLabel)
             button.target = self
             button.action = #selector(statusItemClicked)
         }
         statusItem = item
+        updateStatusItemButton()
+        observeCountdown()
+        countdown.start()
 
         let root = CalendarPopoverView(
             viewModel: viewModel,
@@ -83,6 +87,40 @@ public final class MenuBarController: NSObject {
             MainActor.assumeIsolated { self?.statusItemClicked(nil) }
         }
         panelLog.notice("selfCheck enabled")
+    }
+
+    // MARK: 残り時間の表示
+
+    /// 残り時間の文字列があれば、アイコンを外して等幅数字のフォントでその文字列を出す。なければアイコンだけに戻す。
+    private func updateStatusItemButton() {
+        guard let button = statusItem?.button else { return }
+        if let text = countdown.displayText {
+            button.image = nil
+            button.imagePosition = .noImage
+            // 文字色は、メニューバーの外観に合わせてボタンが決める。
+            button.font = NSFont.monospacedDigitSystemFont(ofSize: NSFont.menuBarFont(ofSize: 0).pointSize, weight: .regular)
+            button.title = text
+            button.setAccessibilityLabel(countdown.accessibilityLabel ?? MenuBarIcon.accessibilityLabel)
+        } else {
+            button.title = ""
+            button.image = NSImage(systemSymbolName: MenuBarIcon.symbolName, accessibilityDescription: MenuBarIcon.accessibilityLabel)
+            button.imagePosition = .imageOnly
+            button.setAccessibilityLabel(MenuBarIcon.accessibilityLabel)
+        }
+    }
+
+    /// 残り時間の表示が変わるたびにボタンを更新する。観測は 1 回ごとに登録し直す。
+    private func observeCountdown() {
+        withObservationTracking {
+            _ = countdown.displayText
+            _ = countdown.accessibilityLabel
+        } onChange: { [weak self] in
+            // onChange は変更の直前に呼ばれる。メインアクターに移ってから読むと、新しい値になっている。
+            Task { @MainActor [weak self] in
+                self?.updateStatusItemButton()
+                self?.observeCountdown()
+            }
+        }
     }
 
     // MARK: 開閉
