@@ -65,7 +65,7 @@ final class MonthWeekImageStore: Sendable {
     }
 
     /// 既定のメモリの上限。
-    static let defaultByteLimit = 64 * 1024 * 1024
+    static let defaultByteLimit = 96 * 1024 * 1024
 
     let byteLimit: Int
     private let state = Mutex(State())
