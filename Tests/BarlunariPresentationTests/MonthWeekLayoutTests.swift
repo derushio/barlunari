@@ -33,7 +33,10 @@ import Testing
     }
 
     /// `AgendaBuilder` で日ごとに並べてから、週の配置を作る。
-    static func layout(_ events: [CalendarEvent], now: Date = SampleData.date(2026, 10, 21, 12, 0)) -> MonthWeekLayout {
+    static func layout(
+        _ events: [CalendarEvent], now: Date = SampleData.date(2026, 10, 21, 12, 0),
+        countdownMark: (CalendarEvent) -> CountdownMark = { _ in .none }
+    ) -> MonthWeekLayout {
         let range = try! DayRange(start: day(-14), dayCount: 35, calendar: calendar)
         let agendas = AgendaBuilder().build(
             events: events, visibleCalendars: [owner.id], accountOrder: [account, owner.accountID], includesDeclined: true,
@@ -42,7 +45,7 @@ import Testing
         let eventsByDay = Dictionary(uniqueKeysWithValues: agendas.map { ($0.day, $0.events) })
         return MonthWeekLayout(
             days: (0..<7).map(day), eventsByDay: eventsByDay, color: { _ in owner.color },
-            now: now, calendar: calendar, formatter: CalendarFormatter(calendar: calendar)
+            countdownMark: countdownMark, now: now, calendar: calendar, formatter: CalendarFormatter(calendar: calendar)
         )
     }
 
