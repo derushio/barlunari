@@ -2,12 +2,14 @@ import BarlunariDomain
 import SwiftUI
 import Synchronization
 
-/// 月表示の 1 週の行。マスの層と予定の層を重ね、クリックを行全体で 1 つのジェスチャーで受ける。
+/// 月表示の 1 週の、覆いより上の行。予定の層と選択日の枠を重ね、クリックを行全体で 1 つのジェスチャーで受ける。
+/// 覆いより下の行（日の数字と今日の印）は `MonthWeekCellsRow`、覆いは `MonthShadeStrip` が受け持つ。
 ///
 /// 予定ごとの `Text` や `Button` の View の階層を行ごとに作ると、スクロールで行が見え始めるフレームが間に合わないので、
 /// 層ごとに 1 つの `Canvas` で描き、クリックは行全体で 1 つのジェスチャーにする。クリックの位置の判定は `MonthRowGeometry` が行い、描画と同じ寸法を使う。
 ///
-/// 層は下から、日のボタン（描かない）、マス（日の数字、今日）、覆い（表示月の外の薄め、選択日の背景、マスの線）、予定（バー、時刻付きの予定、「他 N 件」）、選択日の枠である。
+/// 層は下から、マス（日の数字、今日。`MonthWeekCellsRow`）、覆い（表示月の外の薄め、選択日の背景。`MonthShadeStrip`）、
+/// 日のボタン（描かない）、予定（マスの線、バー、時刻付きの予定、「他 N 件」）、選択日の枠である。このうち日のボタンから後ろがこの View。
 /// 層ごとに別の View にして、読む値を分ける。表示月が変わっても、日を選んでも、読む値が変わらない層の body は評価し直されない。
 /// 特に、予定の層は選択日、表示月、今日を読まないので、見えている全行の予定の文字を描き直さない。
 /// この View の body は ViewModel の値を読まない。位置から日や予定を求めるのは、タップされたときに ViewModel から読んで行う。
@@ -28,8 +30,6 @@ struct MonthWeekRowView: View {
     var body: some View {
         ZStack {
             if usesAssistiveTechnology { MonthWeekDayAccessibilityLayer(viewModel: viewModel, weekIndex: weekIndex) }
-            MonthWeekCellsLayer(viewModel: viewModel, weekIndex: weekIndex)
-            MonthWeekShadeLayer(viewModel: viewModel, weekIndex: weekIndex)
             MonthWeekEventsLayer(
                 viewModel: viewModel, weekIndex: weekIndex, rowHeight: rowHeight, providesAccessibility: usesAssistiveTechnology
             )
@@ -116,6 +116,16 @@ private struct MonthWeekDayAccessibilityLayer: View {
     }
 }
 
+/// 月表示の 1 週の、覆いより下の行。日の数字と今日の印。
+struct MonthWeekCellsRow: View {
+    let viewModel: CalendarPopoverViewModel
+    let weekIndex: Int
+
+    var body: some View {
+        MonthWeekCellsLayer(viewModel: viewModel, weekIndex: weekIndex)
+    }
+}
+
 /// マスの層。日の数字と今日の印だけを描く。読む値は今日だけで、表示月と選択日と予定は読まない。
 ///
 /// 日の数字と今日の印は、表示月にも選択日にも依らないので、画像にして覚えておく（`MonthWeekImageStore`）。
@@ -151,18 +161,24 @@ private struct MonthWeekCellsCanvas: View, Equatable {
     }
 }
 
-/// 覆いの層。表示月の外のマスを薄め、選択日の背景を敷く。文字は描かない。日の数字の上、マスの線と予定の下に置く。
+/// 覆い。表示月の外のマスを薄め、選択日の背景を敷く。文字は描かない。日の数字（`MonthWeekCellsRow`）の上、マスの線と予定（`MonthWeekRowView`）の下に置く。
 /// 読む値は表示月と選択日で、今日と予定は読まない。
 ///
 /// 表示月が変わると、月の中に収まっていた行がすべて月の外になるので、見えている行のほとんどが変わる。
-/// `Canvas` は描き直しだけでも 1 行あたり数百万命令かかるので、色を塗った View を置き、`Layout` で幅だけを変える。
-private struct MonthWeekShadeLayer: View {
+/// 行ごとに覆いを置くと、表示月が変わるフレームで描く週の数だけの View が評価し直されて重い（1 フレームに 8M 命令ほど）。
+/// 表示月の外は、表示月の前と後の 2 つの塊（まるごと外の週と、端の週の一部の列）なので、全週にまたがる 5 つの塗りの View
+/// （前の週、前の端の列、後の端の列、後の週、選択日）にして、`Layout` で位置と大きさだけを変える。
+struct MonthShadeStrip: View {
     let viewModel: CalendarPopoverViewModel
-    let weekIndex: Int
+    let rowHeight: CGFloat
 
     var body: some View {
-        let outside = MonthWeekShade.Outside(columns: viewModel.outOfMonthColumns(inWeek: weekIndex))
-        MonthWeekShadeLayout(outside: outside, selectedColumn: viewModel.selectedColumn(inWeek: weekIndex)) {
+        MonthShadeStripLayout(
+            rowHeight: rowHeight, weekCount: viewModel.weekCount, extent: viewModel.monthShadeExtent(),
+            selected: viewModel.selectedWeekColumn()
+        ) {
+            MonthWeekShade.outOfMonthFill
+            MonthWeekShade.outOfMonthFill
             MonthWeekShade.outOfMonthFill
             MonthWeekShade.outOfMonthFill
             MonthWeekShade.selectedFill
@@ -208,27 +224,42 @@ enum MonthWeekShade {
     static var selectedFill: some View { Color.accentColor.opacity(0.12) }
 }
 
-/// 覆いを置く。1 つ目が先頭から続く列、2 つ目が末尾まで続く列、3 つ目が選択日の列。幅が 0 のものは見えない。子の大きさは問い合わせない。
-private struct MonthWeekShadeLayout: Layout {
-    let outside: MonthWeekShade.Outside
-    let selectedColumn: Int?
+/// 覆いを置く。子は 5 つで、順に、表示月の前のまるごと外の週、最初の日の週の前の列、次の月の最初の日の週の以降の列、後のまるごと外の週、選択日。
+/// 大きさが 0 のものは見えない。子の大きさは問い合わせない。
+private struct MonthShadeStripLayout: Layout {
+    let rowHeight: CGFloat
+    let weekCount: Int
+    let extent: MonthShadeExtent
+    let selected: (week: Int, column: Int)?
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        CGSize(width: proposal.width ?? 0, height: proposal.height ?? 0)
+        CGSize(width: proposal.width ?? 0, height: CGFloat(weekCount) * rowHeight)
     }
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        guard subviews.count == 3 else { return }
-        let cell = bounds.width / CGFloat(MonthRowGeometry.columnCount)
-        func place(_ index: Int, column: Int, columns: Int) {
+        guard subviews.count == 5 else { return }
+        let columns = MonthRowGeometry.columnCount
+        let cell = bounds.width / CGFloat(columns)
+        func place(_ index: Int, x: CGFloat, week: Int, width: CGFloat, weeks: Int) {
             subviews[index].place(
-                at: CGPoint(x: bounds.minX + CGFloat(column) * cell, y: bounds.minY), anchor: .topLeading,
-                proposal: ProposedViewSize(width: CGFloat(columns) * cell, height: bounds.height)
+                at: CGPoint(x: bounds.minX + x, y: bounds.minY + CGFloat(week) * rowHeight), anchor: .topLeading,
+                proposal: ProposedViewSize(width: width, height: CGFloat(weeks) * rowHeight)
             )
         }
-        place(0, column: 0, columns: outside.leading)
-        place(1, column: MonthRowGeometry.columnCount - outside.trailing, columns: outside.trailing)
-        place(2, column: selectedColumn ?? 0, columns: selectedColumn == nil ? 0 : 1)
+        let leadingWeek = min(max(extent.leadingWeek, 0), weekCount)
+        let trailingWeek = min(max(extent.trailingWeek, 0), weekCount)
+        place(0, x: 0, week: 0, width: bounds.width, weeks: leadingWeek)
+        place(1, x: 0, week: leadingWeek, width: CGFloat(extent.leadingColumn) * cell, weeks: leadingWeek < weekCount ? 1 : 0)
+        place(
+            2, x: CGFloat(extent.trailingColumn) * cell, week: trailingWeek,
+            width: CGFloat(columns - extent.trailingColumn) * cell, weeks: trailingWeek < weekCount ? 1 : 0
+        )
+        place(3, x: 0, week: min(trailingWeek + 1, weekCount), width: bounds.width, weeks: max(0, weekCount - trailingWeek - 1))
+        if let selected {
+            place(4, x: CGFloat(selected.column) * cell, week: selected.week, width: cell, weeks: 1)
+        } else {
+            place(4, x: 0, week: 0, width: 0, weeks: 0)
+        }
     }
 }
 

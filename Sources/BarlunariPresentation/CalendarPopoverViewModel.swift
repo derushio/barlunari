@@ -70,6 +70,9 @@ public final class CalendarPopoverViewModel {
     @ObservationIgnored private var monthLayoutCache = MonthWeekLayoutCache()
     /// 月表示の週ごとの描画結果（画像）の記憶。観測の対象にしない。予定の読み込みと日付の変化で捨てる。
     @ObservationIgnored let monthImageStore = MonthWeekImageStore()
+
+    /// 月表示の週の画像の記憶の、バイト数と週の数。操作ツールの報告用。
+    public var monthImageUsage: (bytes: Int, weeks: Int) { (monthImageStore.byteCount, monthImageStore.weekCount) }
     /// 解放時に通知の購読を解除する。
     @ObservationIgnored private var observations: [NotificationObservation] = []
     /// パネルを開いていなくても同期を求め続ける。解放時に止まる。
@@ -314,6 +317,24 @@ public final class CalendarPopoverViewModel {
         return days.indices.filter { !displayedMonth.contains(days[$0]) }
     }
 
+    /// 月表示の覆いが読む、表示月の外の範囲。表示月と週の並びだけを読む。
+    ///
+    /// 週の並びを作り直すと、同じ番号の週が別の 7 日を指すので、`clockRevision` も読む。
+    public func monthShadeExtent() -> MonthShadeExtent {
+        _ = clockRevision
+        let month = displayedMonth
+        let timeline = weekTimeline
+        func position(of day: CalendarDay) -> (week: Int, column: Int)? {
+            guard let week = timeline.weekIndex(containing: day), let column = timeline.days(inWeek: week).firstIndex(of: day) else { return nil }
+            return (week, column)
+        }
+        let leading = position(of: month.firstDay) ?? (0, 0)
+        let trailing = position(of: month.next.firstDay) ?? (timeline.weekCount, 0)
+        return MonthShadeExtent(
+            leadingWeek: leading.week, leadingColumn: leading.column, trailingWeek: trailing.week, trailingColumn: trailing.column
+        )
+    }
+
     /// 月表示の予定の層が読む、番号の週の予定の配置。
     ///
     /// 予定、カレンダーの色、週の並び、暦だけに依存し、選択日、表示月、今日を読まない。
@@ -377,6 +398,16 @@ public final class CalendarPopoverViewModel {
         _ = clockRevision
         let selectedDay = self.selectedDay
         return weekTimeline.days(inWeek: index).firstIndex(of: selectedDay)
+    }
+
+    /// 選択日の週の番号と列。週の並びの外なら `nil`。選択日と週の並びだけを読む。
+    public func selectedWeekColumn() -> (week: Int, column: Int)? {
+        _ = clockRevision
+        let selectedDay = self.selectedDay
+        let timeline = weekTimeline
+        guard let week = timeline.weekIndex(containing: selectedDay),
+              let column = timeline.days(inWeek: week).firstIndex(of: selectedDay) else { return nil }
+        return (week, column)
     }
 
     /// 番号の週の `column` 列の日。範囲外なら `nil`。
@@ -1234,4 +1265,16 @@ public final class CalendarPopoverViewModel {
             preconditionFailure("週の並びを作れなかった: \(error)")
         }
     }
+}
+
+/// 月表示の覆いが薄める、表示月の外の範囲。表示月の最初の日より前のマスと、次の月の最初の日以降のマス。
+public struct MonthShadeExtent: Equatable, Sendable {
+    /// 表示月の最初の日の週の番号。これより前の週は、まるごと外。
+    public let leadingWeek: Int
+    /// 表示月の最初の日の列。その週の、これより前の列は外。
+    public let leadingColumn: Int
+    /// 次の月の最初の日の週の番号。これより後の週は、まるごと外。次の月の最初の日が並びの外なら、週の数。
+    public let trailingWeek: Int
+    /// 次の月の最初の日の列。その週の、この列以降は外。
+    public let trailingColumn: Int
 }

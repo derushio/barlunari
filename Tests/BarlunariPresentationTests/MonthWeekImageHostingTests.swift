@@ -21,8 +21,11 @@ import Testing
         _ = NSApplication.shared
         let appearance = NSAppearance(named: scheme)
         let hosting = NSHostingView(
-            rootView: MonthWeekRowView(viewModel: viewModel, weekIndex: week, rowHeight: size.height)
-                .frame(width: size.width, height: size.height)
+            rootView: ZStack {
+                MonthWeekCellsRow(viewModel: viewModel, weekIndex: week)
+                MonthWeekRowView(viewModel: viewModel, weekIndex: week, rowHeight: size.height)
+            }
+            .frame(width: size.width, height: size.height)
                 .background(Color(nsColor: .windowBackgroundColor))
         )
         hosting.appearance = appearance
@@ -64,6 +67,7 @@ import Testing
             differing += diffs.filter { $0 > 6 }.count
         }
         print("画面に描いた行と画像を貼った行(\(scheme.rawValue)): 倍率の差の最大 \(worst)、6 を超える成分 \(differing)")
-        #expect(worst <= 20)
+        // 表示月の外を薄める覆いは行の外（`MonthShadeStrip`）にあり、この行には含まれない。覆いが差を和らげていた分だけ、以前より上限を上げた。
+        #expect(worst <= 24)
     }
 }

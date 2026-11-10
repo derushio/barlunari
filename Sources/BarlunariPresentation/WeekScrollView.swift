@@ -18,6 +18,11 @@ private struct WeekRowIndexKey: LayoutValueKey {
     static let defaultValue = 0
 }
 
+/// 週の範囲にまたがる子の、範囲。`nil` なら 1 つの週の行。
+private struct WeekSpanKey: LayoutValueKey {
+    static let defaultValue: Range<Int>? = nil
+}
+
 /// 行を使い回す枠と、そこに入れる週。
 private struct WeekSlot: Identifiable {
     let week: Int
@@ -37,14 +42,19 @@ private struct WeekSlot: Identifiable {
 ///
 /// 行の View を作る `row` が、パネルの開閉などで変わる値をキャプチャすると、変わるたびに全行が評価し直される。
 /// `row` には、ViewModel と週の番号から行を作る処理だけを渡す。
-struct WeekScrollView<Row: View>: View {
+struct WeekScrollView<Row: View, Shade: View, Upper: View>: View {
     let viewModel: CalendarPopoverViewModel
     /// 週の行の高さ。変わったときは、そのときの一番上の週を保ってスクロールし直す。
     let rowHeight: CGFloat
     /// スクロールの枠の高さ。
     let viewportHeight: CGFloat
-    /// 週の番号の行を作る。
+    /// 週の番号の行を作る。一番下に重なる。
     let row: (Int) -> Row
+    /// 全週にまたがる覆いを作る。行の上、`upperRow` の下に重なる。月表示の、表示月の外と選択日の覆い。
+    /// 描く週の範囲に依らず、スクロールで行を作るフレームで評価し直されない。
+    let shade: () -> Shade
+    /// 週の番号の行を作る。覆いの上に重なる。クリックはこの行が受ける。
+    let upperRow: (Int) -> Upper
     /// 月表示で、操作が止まっている間に、見えている週の前後の週の予定の配置と文字を先に用意するか。
     let preparesMonthEvents: Bool
 
@@ -67,8 +77,12 @@ struct WeekScrollView<Row: View>: View {
 
     init(
         viewModel: CalendarPopoverViewModel, rowHeight: CGFloat, viewportHeight: CGFloat, preparesMonthEvents: Bool = false,
-        @ViewBuilder row: @escaping (Int) -> Row
+        @ViewBuilder row: @escaping (Int) -> Row,
+        @ViewBuilder shade: @escaping () -> Shade,
+        @ViewBuilder upperRow: @escaping (Int) -> Upper
     ) {
+        self.shade = shade
+        self.upperRow = upperRow
         self.preparesMonthEvents = preparesMonthEvents
         self.viewModel = viewModel
         self.rowHeight = rowHeight
@@ -104,6 +118,10 @@ struct WeekScrollView<Row: View>: View {
             WeekRowsLayout(rowHeight: rowHeight, weekCount: viewModel.weekCount) {
                 ForEach(renderedRows) { slot in
                     row(slot.week).layoutValue(key: WeekRowIndexKey.self, value: slot.week)
+                }
+                shade().layoutValue(key: WeekSpanKey.self, value: 0..<viewModel.weekCount)
+                ForEach(renderedRows) { slot in
+                    upperRow(slot.week).layoutValue(key: WeekRowIndexKey.self, value: slot.week)
                 }
             }
         }
@@ -213,6 +231,19 @@ struct WeekScrollView<Row: View>: View {
     }
 }
 
+extension WeekScrollView where Shade == EmptyView, Upper == EmptyView {
+    /// 覆いと上の行を持たない、行だけのスクロール。コンパクト表示のマス目。
+    init(
+        viewModel: CalendarPopoverViewModel, rowHeight: CGFloat, viewportHeight: CGFloat, preparesMonthEvents: Bool = false,
+        @ViewBuilder row: @escaping (Int) -> Row
+    ) {
+        self.init(
+            viewModel: viewModel, rowHeight: rowHeight, viewportHeight: viewportHeight, preparesMonthEvents: preparesMonthEvents,
+            row: row, shade: { EmptyView() }, upperRow: { _ in EmptyView() }
+        )
+    }
+}
+
 /// 週の行を、週の番号から決まる固定の位置に置く。大きさは全週分の高さで、子の大きさを問い合わせない。
 ///
 /// `VStack` や `LazyVStack` は、配置のたびに子の大きさを測る。スクロールで描く行が入れ替わるたびに全行を測り直すと、
@@ -228,6 +259,14 @@ struct WeekRowsLayout: Layout {
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
         let rowProposal = ProposedViewSize(width: bounds.width, height: rowHeight)
         for subview in subviews {
+            if let span = subview[WeekSpanKey.self] {
+                // 週の範囲にまたがる覆い。
+                subview.place(
+                    at: CGPoint(x: bounds.minX, y: bounds.minY + CGFloat(span.lowerBound) * rowHeight), anchor: .topLeading,
+                    proposal: ProposedViewSize(width: bounds.width, height: CGFloat(span.count) * rowHeight)
+                )
+                continue
+            }
             let y = bounds.minY + CGFloat(subview[WeekRowIndexKey.self]) * rowHeight
             subview.place(at: CGPoint(x: bounds.minX, y: y), anchor: .topLeading, proposal: rowProposal)
         }

@@ -282,4 +282,30 @@ import Testing
         #expect(MonthWeekShade.Outside(columns: [0, 1, 2]) == MonthWeekShade.Outside(columns: [0, 1, 2]))
         #expect(MonthWeekShade.Outside(columns: [5, 6]).trailing == 2)
     }
+
+    @Test func 覆いの範囲は週ごとの表示月の外の列と同じ列を薄める() async {
+        let viewModel = await Self.denseViewModel()
+        let moves: [@MainActor () -> Void] = [{}, { viewModel.showNextMonth() }, { viewModel.showPreviousMonth() }, { viewModel.showPreviousMonth() }]
+        for move in moves {
+            move()
+            let month = viewModel.displayedMonth
+            let extent = viewModel.monthShadeExtent()
+            for week in 0..<viewModel.weekCount {
+                let columns = (0..<MonthRowGeometry.columnCount).filter { column in
+                    week < extent.leadingWeek || (week == extent.leadingWeek && column < extent.leadingColumn)
+                        || week > extent.trailingWeek || (week == extent.trailingWeek && column >= extent.trailingColumn)
+                }
+                #expect(columns == viewModel.outOfMonthColumns(inWeek: week), "\(month) 週 \(week)")
+            }
+        }
+    }
+
+    @Test func 選択日の週と列は週ごとの選択日の列と一致する() async {
+        let viewModel = await Self.denseViewModel()
+        let selected = viewModel.selectedWeekColumn()
+        for week in 0..<viewModel.weekCount {
+            let column = viewModel.selectedColumn(inWeek: week)
+            #expect(column == (selected?.week == week ? selected?.column : nil), "週 \(week)")
+        }
+    }
 }
