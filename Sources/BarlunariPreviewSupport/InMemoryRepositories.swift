@@ -196,3 +196,14 @@ public final class SyncableEventRepository: CalendarEventRepository {
         return try await InMemoryCalendarEventRepository(events: local).events(in: interval, calendars: calendars)
     }
 }
+
+public actor InMemoryCountdownExclusionRepository: CountdownExclusionRepository {
+    private var exclusions: CountdownExclusions
+
+    public init(exclusions: CountdownExclusions = CountdownExclusions()) {
+        self.exclusions = exclusions
+    }
+
+    public func load() async -> CountdownExclusions { exclusions }
+    public func update(_ body: @Sendable (inout CountdownExclusions) -> Void) async { body(&exclusions) }
+}
