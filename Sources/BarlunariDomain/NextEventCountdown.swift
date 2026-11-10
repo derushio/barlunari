@@ -2,8 +2,8 @@ import Foundation
 
 /// 次の予定の開始までの残り時間。メニューバーの項目に `HH:mm` で出す。
 ///
-/// 対象になる予定は、時刻付きで、開始が現在より後で、自分が辞退しておらず、残り時間の対象から外していないもの。
-/// 残りが 24 時間以上先の予定は対象にしない（表示の最大は `23:59`）。終日予定と開始済みの予定も対象にしない。
+/// 対象になる予定は、`CountdownTargetSettings` で対象になり、開始が現在より後で、残りが 24 時間未満のもの（表示の最大は `23:59`）。
+/// 自分が辞退した予定（`attendance == .declined`）は、設定にかかわらず数えない。ほかの参加状況は見ない。終日の予定は、対象にしたときだけ数え、開始はその日の 0:00 とする。
 public struct NextEventCountdown: Sendable, Hashable {
     /// 表示する残り時間の上限（分）。これ以上先の予定は対象にしない。
     public static let maximumRemainingMinutes = 24 * 60
@@ -32,25 +32,26 @@ public struct NextEventCountdown: Sendable, Hashable {
         self.remainingMinutes = minutes
     }
 
-    /// 予定が、日時だけで残り時間の対象になり得るか。時刻付きで、開始が `now` より後で、辞退していない予定。
-    ///
-    /// 残りが 24 時間以上先の予定も `true` になる。除外の設定を出すかどうかの判定に使う。
-    /// 除外しているかどうかは見ない。
-    public static func canBeCounted(_ event: CalendarEvent, at now: Date) -> Bool {
-        guard case .timed(let interval) = event.schedule else { return false }
-        return interval.start > now && event.attendance != .declined
+    /// 予定の開始日時。時刻付きは開始の時刻、終日は最初の日の 0:00（`calendar` の暦）。
+    public static func start(of event: CalendarEvent, calendar: Calendar) -> Date {
+        switch event.schedule {
+        case .timed(let interval): interval.start
+        case .allDay(let range): range.start.startDate(in: calendar)
+        }
     }
 
-    /// `events` の中で、対象の予定のうち開始が最も早いものまでの残り時間。対象がなければ `nil`。
+    /// `events` の中で、`settings` で対象になる予定のうち開始が最も早いものまでの残り時間。対象がなければ `nil`。
+    ///
+    /// 自分が辞退した予定は、設定にかかわらず数えない。ほかの参加状況は見ない。開始が `now` 以前の予定と、残りが 24 時間以上先の予定は対象にならない。
     public static func next(
         in events: [CalendarEvent],
-        excluding exclusions: CountdownExclusions,
-        at now: Date
+        settings: CountdownTargetSettings,
+        at now: Date,
+        calendar: Calendar
     ) -> NextEventCountdown? {
         var earliest: NextEventCountdown?
-        for event in events where canBeCounted(event, at: now) && !exclusions.isExcluded(event.id) {
-            guard case .timed(let interval) = event.schedule,
-                  let countdown = NextEventCountdown(start: interval.start, now: now)
+        for event in events where event.attendance != .declined && settings.isTarget(event) {
+            guard let countdown = NextEventCountdown(start: start(of: event, calendar: calendar), now: now)
             else { continue }
             if earliest.map({ countdown.start < $0.start }) ?? true { earliest = countdown }
         }

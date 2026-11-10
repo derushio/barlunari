@@ -22,13 +22,13 @@ public protocol CalendarVisibilityRepository: Sendable {
     func update(_ body: @Sendable (inout CalendarVisibility) -> Void) async
 }
 
-/// メニューバーの残り時間の対象から外した予定の保存先。
-public protocol CountdownExclusionRepository: Sendable {
-    func load() async -> CountdownExclusions
+/// メニューバーの残り時間の対象にするかの設定の保存先。
+public protocol CountdownTargetSettingsRepository: Sendable {
+    func load() async -> CountdownTargetSettings
 
     /// 保存済みの集約を読み、`body` で変更して保存するまでを原子的に行う。
     ///
     /// 同時に呼ばれても、互いの変更を失わない。読んでから書くまでの間に他の更新が割り込まないよう、
     /// 実装は呼び出しを直列化する。保存に失敗したら投げ、そのときは変更を保存しない。
-    func update(_ body: @Sendable (inout CountdownExclusions) -> Void) async throws
+    func update(_ body: @Sendable (inout CountdownTargetSettings) -> Void) async throws
 }

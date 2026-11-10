@@ -25,8 +25,8 @@ import Testing
         )
     }
 
-    func countdown(_ events: [CalendarEvent], excluding exclusions: CountdownExclusions = CountdownExclusions()) -> NextEventCountdown? {
-        NextEventCountdown.next(in: events, excluding: exclusions, at: now)
+    func countdown(_ events: [CalendarEvent], settings: CountdownTargetSettings = CountdownTargetSettings()) -> NextEventCountdown? {
+        NextEventCountdown.next(in: events, settings: settings, at: now, calendar: TestSupport.calendar())
     }
 
     @Test(arguments: [
@@ -62,24 +62,44 @@ import Testing
         #expect(countdown([timed("a", after: 0)]) == nil)
     }
 
-    @Test func 終日予定は対象にしない() {
+    @Test func 終日予定は既定では対象にしない() {
         #expect(countdown([allDay("a")]) == nil)
     }
 
-    @Test func 辞退した予定は対象にしない() {
-        #expect(countdown([timed("a", after: 600, attendance: .declined)]) == nil)
+    @Test func 終日予定を対象にするとその日の0時までの残り時間になる() {
+        let event = allDay("a")
+        var settings = CountdownTargetSettings()
+        settings.set(event.id, isTarget: true)
+        let result = countdown([event], settings: settings)
+        // now は 10/24 12:00、終日予定は 10/25 の 0:00 開始なので 12 時間。
+        #expect(result?.start == TestSupport.date(2026, 10, 25, 0, 0))
+        #expect(result?.remainingMinutes == 720)
+    }
+
+    @Test func 辞退した予定は設定にかかわらず数えず他の参加状況は判定に使わない() {
+        let declined = timed("a", after: 600, attendance: .declined)
+        #expect(countdown([declined]) == nil)
+        var settings = CountdownTargetSettings()
+        settings.set(declined.id, isTarget: true)
+        #expect(countdown([declined], settings: settings) == nil)
         #expect(countdown([timed("a", after: 600, attendance: .needsAction)])?.remainingMinutes == 10)
+        #expect(countdown([timed("a", after: 600, attendance: .tentative)])?.remainingMinutes == 10)
         #expect(countdown([timed("a", after: 600, attendance: .notApplicable)])?.remainingMinutes == 10)
     }
 
-    @Test func 除外した予定は対象にせず次の予定を選ぶ() {
+    @Test func 辞退した予定を飛ばして次の予定を選ぶ() {
+        let declined = timed("declined", after: 600, attendance: .declined)
+        #expect(countdown([declined, timed("next", after: 1800)])?.remainingMinutes == 30)
+    }
+
+    @Test func 対象外にした予定は数えず次の予定を選ぶ() {
         let first = timed("first", after: 600)
         let second = timed("second", after: 1800)
-        var exclusions = CountdownExclusions()
-        exclusions.exclude(first.id, start: now.addingTimeInterval(600))
-        #expect(countdown([first, second], excluding: exclusions)?.remainingMinutes == 30)
-        exclusions.include(first.id)
-        #expect(countdown([first, second], excluding: exclusions)?.remainingMinutes == 10)
+        var settings = CountdownTargetSettings()
+        settings.set(first.id, isTarget: false)
+        #expect(countdown([first, second], settings: settings)?.remainingMinutes == 30)
+        settings.set(first.id, isTarget: true)
+        #expect(countdown([first, second], settings: settings)?.remainingMinutes == 10)
     }
 
     @Test func 開始が最も早い予定を選ぶ() {
@@ -118,60 +138,55 @@ import Testing
         #expect(change == now.addingTimeInterval(1))
         #expect(NextEventCountdown(start: start, now: change)?.remainingMinutes == 1)
     }
-
-    @Test func 対象になり得るかは24時間より先でも真() {
-        #expect(NextEventCountdown.canBeCounted(timed("far", after: 3 * 86_400), at: now))
-        #expect(NextEventCountdown.canBeCounted(timed("soon", after: 60), at: now))
-        #expect(!NextEventCountdown.canBeCounted(timed("started", after: -1), at: now))
-        #expect(!NextEventCountdown.canBeCounted(timed("declined", after: 60, attendance: .declined), at: now))
-        #expect(!NextEventCountdown.canBeCounted(allDay("allDay"), at: now))
-    }
 }
 
-@Suite struct CountdownExclusionsTests {
+@Suite struct CountdownTargetSettingsTests {
     let account = TestSupport.accountID("a")
-    let calendar = TestSupport.calendar()
+    let work = TestSupport.calendarID("work")
     let start = TestSupport.date(2026, 10, 24, 14, 0)
 
-    func identity(_ id: String, account: AccountID? = nil, calendarID: String = "work") -> CalendarEvent.Identity {
-        CalendarEvent.Identity(
-            accountID: account ?? self.account, calendarID: TestSupport.calendarID(calendarID), eventID: TestSupport.eventID(id)
+    func event(_ id: String, account: AccountID? = nil, calendarID: CalendarID? = nil, allDay: Bool = false) -> CalendarEvent {
+        CalendarEvent(
+            accountID: account ?? self.account, id: TestSupport.eventID(id), calendarID: calendarID ?? work, title: id,
+            schedule: allDay
+                ? .allDay(TestSupport.range(TestSupport.day(2026, 10, 25), days: 1))
+                : .timed(DateInterval(start: start, duration: 3600))
         )
     }
 
-    @Test func 初めは何も除外していない() {
-        #expect(!CountdownExclusions().isExcluded(identity("a")))
+    @Test func 既定は時刻付きが対象で終日が対象外() {
+        let settings = CountdownTargetSettings()
+        #expect(settings.isTarget(event("a")))
+        #expect(!settings.isTarget(event("a", allDay: true)))
     }
 
-    @Test func 除外して戻せる() {
-        var exclusions = CountdownExclusions()
-        exclusions.exclude(identity("a"), start: start)
-        #expect(exclusions.isExcluded(identity("a")))
-        exclusions.include(identity("a"))
-        #expect(!exclusions.isExcluded(identity("a")))
+    @Test func 辞退した予定の設定値も既定も参加状況に左右されない() {
+        let declined = CalendarEvent(
+            accountID: account, id: TestSupport.eventID("d"), calendarID: work, title: "d",
+            schedule: .timed(DateInterval(start: start, duration: 3600)), attendance: .declined
+        )
+        #expect(CountdownTargetSettings().isTarget(declined))
+        var settings = CountdownTargetSettings()
+        settings.set(declined.id, isTarget: false)
+        #expect(!settings.isTarget(declined))
+    }
+
+    @Test func 選んだ値が既定より優先され何度でも切り替えられる() {
+        var settings = CountdownTargetSettings()
+        let timed = event("a")
+        let allDay = event("b", allDay: true)
+        settings.set(timed.id, isTarget: false)
+        settings.set(allDay.id, isTarget: true)
+        #expect(!settings.isTarget(timed))
+        #expect(settings.isTarget(allDay))
+        settings.set(timed.id, isTarget: true)
+        #expect(settings.isTarget(timed))
     }
 
     @Test func 同じ予定IDでもアカウントとカレンダーが違えば別の予定() {
-        var exclusions = CountdownExclusions()
-        exclusions.exclude(identity("a"), start: start)
-        #expect(!exclusions.isExcluded(identity("a", account: TestSupport.accountID("b"))))
-        #expect(!exclusions.isExcluded(identity("a", calendarID: "personal")))
-    }
-
-    @Test func 戻していない予定を戻しても何も起きない() {
-        var exclusions = CountdownExclusions()
-        exclusions.include(identity("a"))
-        #expect(exclusions == CountdownExclusions())
-    }
-
-    @Test func 開始が指定の時刻より前の項目を消す() {
-        var exclusions = CountdownExclusions()
-        exclusions.exclude(identity("past"), start: start.addingTimeInterval(-1))
-        exclusions.exclude(identity("now"), start: start)
-        exclusions.exclude(identity("future"), start: start.addingTimeInterval(1))
-        exclusions.removeEntries(startingBefore: start)
-        #expect(!exclusions.isExcluded(identity("past")))
-        #expect(exclusions.isExcluded(identity("now")))
-        #expect(exclusions.isExcluded(identity("future")))
+        var settings = CountdownTargetSettings()
+        settings.set(event("a").id, isTarget: false)
+        #expect(settings.isTarget(event("a", account: TestSupport.accountID("b"))))
+        #expect(settings.isTarget(event("a", calendarID: TestSupport.calendarID("personal"))))
     }
 }
