@@ -270,9 +270,12 @@ private struct AllDayItemRow: View {
             .overlay {
                 if isSelected {
                     RoundedRectangle(cornerRadius: 4).strokeBorder(roles.accentColor, lineWidth: 2)
-                } else if item.attendance == .needsResponse {
+                } else if item.attendance == .needsResponse || item.attendance == .declined {
                     RoundedRectangle(cornerRadius: 4)
-                        .strokeBorder(roles.accentColor, style: StrokeStyle(lineWidth: 1, dash: CalendarPalette.needsResponseDash))
+                        .strokeBorder(
+                            roles.accentColor.opacity(item.attendance == .declined ? CalendarPalette.pastTextOpacity : 1),
+                            style: StrokeStyle(lineWidth: 1, dash: CalendarPalette.statusDash)
+                        )
                 }
             }
             .overlay(alignment: .leading) {
@@ -388,11 +391,12 @@ private struct DayTimelineCanvas: View {
             }
             // 詳細を出している予定は、予定の色の枠線（2pt）で強調する。ブロックの形で切るので、外側の半分は切れる。内側に 2pt 入れて描く。
             if isSelected { layer.stroke(Path(roundedRect: frame.insetBy(dx: 1, dy: 1), cornerRadius: 3), with: .color(roles.accentColor), lineWidth: 2) }
-            // 未回答の予定は、予定の色の点線で囲む。選択中の実線の枠を優先する。
-            if attendance == .needsResponse, !isSelected {
+            // 未回答の予定は予定の色の破線、辞退した予定は同じ破線を薄くして囲む。選択中の実線の枠を優先する。
+            if (attendance == .needsResponse || isDeclined), !isSelected {
                 layer.stroke(
-                    Path(roundedRect: frame.insetBy(dx: 0.5, dy: 0.5), cornerRadius: 3.5), with: .color(roles.accentColor),
-                    style: StrokeStyle(lineWidth: 1, dash: CalendarPalette.needsResponseDash)
+                    Path(roundedRect: frame.insetBy(dx: 0.5, dy: 0.5), cornerRadius: 3.5),
+                    with: .color(roles.accentColor.opacity(isDeclined ? CalendarPalette.pastTextOpacity : 1)),
+                    style: StrokeStyle(lineWidth: 1, dash: CalendarPalette.statusDash)
                 )
             }
             let markSymbol = block.item.countdownMark.symbolName

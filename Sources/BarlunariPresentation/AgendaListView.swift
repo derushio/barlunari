@@ -129,7 +129,7 @@ struct AgendaRowView: View {
                 .overlay {
                     if state.attendance == .needsResponse {
                         RoundedRectangle(cornerRadius: 6)
-                            .strokeBorder(accent, style: StrokeStyle(lineWidth: 1, dash: CalendarPalette.needsResponseDash))
+                            .strokeBorder(accent, style: StrokeStyle(lineWidth: 1, dash: CalendarPalette.statusDash))
                     }
                 }
                 .contentShape(Rectangle())

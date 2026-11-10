@@ -56,8 +56,8 @@ public enum CalendarPalette {
     public static let pastOpacity: Double = 0.85
     /// 過去の予定の文字と薄い背景を描くときの不透明度。標準の文字色がこの値でも背景に対して 4.5:1 以上を保つ。
     public static let pastTextOpacity: Double = 0.7
-    /// 未回答の予定を囲む点線の枠。破線の長さと間隔（pt）。
-    public static let needsResponseDash: [CGFloat] = [3, 2]
+    /// 未回答と辞退の予定を囲む破線の枠。破線の長さと間隔（pt）。
+    public static let statusDash: [CGFloat] = [3, 2]
 
     /// パレットの全色。有彩色、灰色の系統、茶色などの順に並ぶ。
     public static let all: [PaletteColor] = [
