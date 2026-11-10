@@ -592,13 +592,14 @@ enum MonthWeekPainter {
         _ symbol: String?, color: Color, rightEdge: CGFloat, midY: CGFloat, in context: inout GraphicsContext
     ) {
         guard let symbol else { return }
-        var image = context.resolve(Image(systemName: symbol).symbolRenderingMode(.monochrome))
+        // 多色で描き、時計は文字の色、右下の印は「外した」を赤、「含めた」を青の塗りにする。形と色の両方で見分けられる。
+        var image = context.resolve(Image(systemName: symbol).symbolRenderingMode(.multicolor))
         image.shading = .color(color)
         let rect = CGRect(x: rightEdge - markSize, y: midY - markSize / 2, width: markSize, height: markSize)
         context.draw(image, in: rect.fitting(aspectRatio: image.size))
     }
 
-    private static let markSize: CGFloat = 12
+    private static let markSize: CGFloat = 14
 
     private static func drawMore(_ count: Int, column: Int, in context: inout GraphicsContext, geometry: MonthRowGeometry) {
         let lane = geometry.laneRect(lane: geometry.laneCapacity - 1, columns: column..<(column + 1))

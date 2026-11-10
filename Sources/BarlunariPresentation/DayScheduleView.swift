@@ -258,7 +258,7 @@ private struct AllDayItemRow: View {
                     Text(label).font(.caption2.weight(.medium)).foregroundStyle(.secondary)
                 }
                 if let symbol = item.countdownMark.symbolName {
-                    Image(systemName: symbol).font(.caption2).foregroundStyle(.secondary)
+                    Image(systemName: symbol).font(.callout).symbolRenderingMode(.multicolor)
                 }
             }
             .padding(.horizontal, 8)
@@ -435,14 +435,14 @@ private struct DayTimelineCanvas: View {
     }
 
     /// 残り時間の記号の 1 辺の大きさ。
-    private static let markSize: CGFloat = 12
+    private static let markSize: CGFloat = 15
 
     /// 残り時間の記号を、`rightEdge` に右端を合わせて描く。`symbol` が `nil` なら何も描かない。
     private static func drawMark(_ symbol: String?, rightEdge: CGFloat, midY: CGFloat, maxSize: CGFloat, in context: inout GraphicsContext) {
         guard let symbol, maxSize >= 6 else { return }
         let size = min(markSize, maxSize)
-        var image = context.resolve(Image(systemName: symbol).symbolRenderingMode(.monochrome))
-        image.shading = .color(.secondary)
+        // 多色で描き、時計は文字の色、右下の印は「外した」を赤、「含めた」を青の塗りにする。形と色の両方で見分けられる。
+        let image = context.resolve(Image(systemName: symbol).symbolRenderingMode(.multicolor))
         let scale = min(size / max(image.size.width, 1), size / max(image.size.height, 1))
         let fitted = CGSize(width: image.size.width * scale, height: image.size.height * scale)
         context.draw(image, in: CGRect(x: rightEdge - fitted.width, y: midY - fitted.height / 2, width: fitted.width, height: fitted.height))
