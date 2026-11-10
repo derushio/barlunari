@@ -145,7 +145,12 @@ struct EventDetailView: View {
                     .padding(.leading, Self.iconColumnWidth + Self.iconTextSpacing)
             }
             if detail.isCalendarExcludedFromCountdown {
-                Text("このカレンダーは、設定の「残り時間」タブで含めない設定です。この予定のチェックが優先されます。")
+                // チェックがオンの予定は、カレンダーの設定より予定ごとの選択が優先されて数えている。文がチェックの状態と食い違って読めないよう、状態ごとに出し分ける。
+                Text(
+                    detail.includedInCountdown
+                        ? "このカレンダーは設定の「残り時間」タブで含めない設定ですが、この予定は個別に含めています。"
+                        : "このカレンダーは設定の「残り時間」タブで含めない設定です。チェックすると、この予定だけ含めます。"
+                )
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .padding(.leading, Self.iconColumnWidth + Self.iconTextSpacing)
