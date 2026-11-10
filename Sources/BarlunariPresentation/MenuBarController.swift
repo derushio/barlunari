@@ -95,16 +95,14 @@ public final class MenuBarController: NSObject {
     private func updateStatusItemButton() {
         guard let button = statusItem?.button else { return }
         if let text = countdown.displayText {
-            let size = NSFont.menuBarFont(ofSize: 0).pointSize
             button.image = nil
             button.imagePosition = .noImage
-            button.attributedTitle = NSAttributedString(
-                string: text,
-                attributes: [.font: NSFont.monospacedDigitSystemFont(ofSize: size, weight: .regular)]
-            )
+            // 色を持たない属性付き文字列にせず、title と font で出す。文字色はメニューバーの外観に合わせてボタンが決める。
+            button.font = NSFont.monospacedDigitSystemFont(ofSize: NSFont.menuBarFont(ofSize: 0).pointSize, weight: .regular)
+            button.title = text
             button.setAccessibilityLabel(countdown.accessibilityLabel ?? MenuBarIcon.accessibilityLabel)
         } else {
-            button.attributedTitle = NSAttributedString(string: "")
+            button.title = ""
             button.image = NSImage(systemSymbolName: MenuBarIcon.symbolName, accessibilityDescription: MenuBarIcon.accessibilityLabel)
             button.imagePosition = .imageOnly
             button.setAccessibilityLabel(MenuBarIcon.accessibilityLabel)
