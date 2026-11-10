@@ -220,3 +220,27 @@ public actor InMemoryCountdownTargetSettingsRepository: CountdownTargetSettingsR
         updateCount += 1
     }
 }
+
+/// 保存を失敗させられるインメモリの、残り時間に含めないカレンダーの設定の保存先。`setFailure(_:)` で失敗させると、`update` は変更を保存せずに投げる。
+public actor InMemoryCountdownCalendarSettingsRepository: CountdownCalendarSettingsRepository {
+    private var settings: CountdownCalendarSettings
+    private var failure: (any Error)?
+    /// 成功した `update` の回数。
+    public private(set) var updateCount = 0
+
+    public init(settings: CountdownCalendarSettings = CountdownCalendarSettings(), error: (any Error)? = nil) {
+        self.settings = settings
+        self.failure = error
+    }
+
+    /// 以後の `update` を `error` で失敗させる。`nil` で元に戻す。
+    public func setFailure(_ error: (any Error)?) { failure = error }
+
+    public func load() async -> CountdownCalendarSettings { settings }
+
+    public func update(_ body: @Sendable (inout CountdownCalendarSettings) -> Void) async throws {
+        if let failure { throw failure }
+        body(&settings)
+        updateCount += 1
+    }
+}

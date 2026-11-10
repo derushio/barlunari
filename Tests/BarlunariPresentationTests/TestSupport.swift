@@ -130,6 +130,7 @@ struct Harness {
     let authorizer: FakeCalendarAccessAuthorizer
     let visibility: InMemoryCalendarVisibilityRepository
     let countdownSettings: InMemoryCountdownTargetSettingsRepository
+    let countdownCalendarSettings: InMemoryCountdownCalendarSettingsRepository
     /// ポップオーバーと同じ通知を共有するメニューバーの残り時間。`start()` は呼んでいない。
     let countdown: MenuBarCountdownViewModel
     let launchAtLogin: FakeLaunchAtLoginService
@@ -149,6 +150,7 @@ struct Harness {
         eventError: (any Error)? = nil,
         launchAtLoginError: (any Error)? = nil,
         hiddenCalendars: [UserCalendar] = [],
+        countdownExcludedCalendars: [UserCalendar] = [],
         dateProvider: MutableDateProvider = MutableDateProvider(),
         displayMode: CalendarDisplayMode? = nil,
         showDeclinedEvents: Bool? = nil,
@@ -167,6 +169,9 @@ struct Harness {
         hiddenCalendars.forEach { hidden.hide($0.id) }
         visibility = InMemoryCalendarVisibilityRepository(visibility: hidden)
         countdownSettings = InMemoryCountdownTargetSettingsRepository()
+        countdownCalendarSettings = InMemoryCountdownCalendarSettingsRepository(
+            settings: CountdownCalendarSettings(excludedCalendars: Set(countdownExcludedCalendars.map(\.id)))
+        )
         calendarRepository = CountingCalendarRepository(accounts: accounts, calendars: calendars)
         authorizer = FakeCalendarAccessAuthorizer(
             status: status, statusAfterRequest: statusAfterRequest, requestError: requestError
@@ -200,7 +205,9 @@ struct Harness {
                 authorizer: authorizer, calendarRepository: calendarRepository, visibilityRepository: visibility
             ),
             setCalendarVisibility: SetCalendarVisibilityUseCase(visibilityRepository: visibility),
-            loadCountdownSettings: LoadCountdownTargetSettingsUseCase(repository: countdownSettings),
+            loadCountdownPolicy: LoadCountdownTargetPolicyUseCase(
+                settingsRepository: countdownSettings, calendarSettingsRepository: countdownCalendarSettings
+            ),
             setCountdownTarget: SetCountdownTargetUseCase(repository: countdownSettings),
             workspaceNotificationCenter: workspaceNotificationCenter,
             notificationCenter: notificationCenter
@@ -212,6 +219,7 @@ struct Harness {
                 eventRepository: eventRepository,
                 visibilityRepository: visibility,
                 settingsRepository: countdownSettings,
+                calendarSettingsRepository: countdownCalendarSettings,
                 dateProvider: overridingDateProvider
             ),
             dateProvider: overridingDateProvider,
@@ -230,6 +238,8 @@ struct Harness {
                 authorizer: authorizer, calendarRepository: calendarRepository, visibilityRepository: visibility
             ),
             setCalendarVisibility: SetCalendarVisibilityUseCase(visibilityRepository: visibility),
+            loadCountdownCalendarSettings: LoadCountdownCalendarSettingsUseCase(repository: countdownCalendarSettings),
+            setCountdownCalendarIncluded: SetCountdownCalendarIncludedUseCase(repository: countdownCalendarSettings),
             requestCalendarAccess: requestAccess,
             openSystemSettings: openSystemSettings,
             changeNotifier: notifier,

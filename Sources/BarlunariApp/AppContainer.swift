@@ -23,6 +23,8 @@ final class AppContainer {
         let visibilityRepository = UserDefaultsCalendarVisibilityRepository()
         // 残り時間の対象にするかの設定。ポップオーバーの詳細で切り替え、メニューバーの表示が読む。
         let countdownSettingsRepository = UserDefaultsCountdownTargetSettingsRepository()
+        // 残り時間に含めないカレンダーの設定。予定ごとの設定とは別に保存し、設定画面の「残り時間」タブで切り替える。
+        let countdownCalendarSettingsRepository = UserDefaultsCountdownCalendarSettingsRepository()
         let displayModeStore = UserDefaultsDisplayModeStore()
         let showDeclinedEventsStore = UserDefaultsShowDeclinedEventsStore()
         let launchAtLoginService = SMAppServiceLaunchAtLoginService()
@@ -62,7 +64,10 @@ final class AppContainer {
             saveDisplayMode: SaveDisplayModeUseCase(store: displayModeStore),
             listCalendars: listCalendars,
             setCalendarVisibility: setCalendarVisibility,
-            loadCountdownSettings: LoadCountdownTargetSettingsUseCase(repository: countdownSettingsRepository),
+            loadCountdownPolicy: LoadCountdownTargetPolicyUseCase(
+                settingsRepository: countdownSettingsRepository,
+                calendarSettingsRepository: countdownCalendarSettingsRepository
+            ),
             setCountdownTarget: SetCountdownTargetUseCase(repository: countdownSettingsRepository),
             workspaceNotificationCenter: NSWorkspace.shared.notificationCenter
         )
@@ -74,6 +79,7 @@ final class AppContainer {
                 eventRepository: calendarStore,
                 visibilityRepository: visibilityRepository,
                 settingsRepository: countdownSettingsRepository,
+                calendarSettingsRepository: countdownCalendarSettingsRepository,
                 dateProvider: dateProvider
             ),
             dateProvider: dateProvider,
@@ -89,6 +95,8 @@ final class AppContainer {
             saveFirstWeekday: SaveFirstWeekdayUseCase(store: firstWeekdayStore),
             listCalendars: listCalendars,
             setCalendarVisibility: setCalendarVisibility,
+            loadCountdownCalendarSettings: LoadCountdownCalendarSettingsUseCase(repository: countdownCalendarSettingsRepository),
+            setCountdownCalendarIncluded: SetCountdownCalendarIncludedUseCase(repository: countdownCalendarSettingsRepository),
             requestCalendarAccess: requestCalendarAccess,
             openSystemSettings: openSystemSettings,
             changeNotifier: changeNotifier

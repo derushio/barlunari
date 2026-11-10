@@ -10,6 +10,7 @@ public struct LoadUpcomingEventsUseCase: Sendable {
     private let eventRepository: any CalendarEventRepository
     private let visibilityRepository: any CalendarVisibilityRepository
     private let settingsRepository: any CountdownTargetSettingsRepository
+    private let calendarSettingsRepository: any CountdownCalendarSettingsRepository
     private let dateProvider: any DateProvider
     private let agendaBuilder: AgendaBuilder
 
@@ -19,6 +20,7 @@ public struct LoadUpcomingEventsUseCase: Sendable {
         eventRepository: any CalendarEventRepository,
         visibilityRepository: any CalendarVisibilityRepository,
         settingsRepository: any CountdownTargetSettingsRepository,
+        calendarSettingsRepository: any CountdownCalendarSettingsRepository,
         dateProvider: any DateProvider,
         agendaBuilder: AgendaBuilder = AgendaBuilder()
     ) {
@@ -27,6 +29,7 @@ public struct LoadUpcomingEventsUseCase: Sendable {
         self.eventRepository = eventRepository
         self.visibilityRepository = visibilityRepository
         self.settingsRepository = settingsRepository
+        self.calendarSettingsRepository = calendarSettingsRepository
         self.dateProvider = dateProvider
         self.agendaBuilder = agendaBuilder
     }
@@ -56,22 +59,67 @@ public struct LoadUpcomingEventsUseCase: Sendable {
                 accountOrder: accounts.map(\.id),
                 includesDeclined: true
             ),
-            settings: await settingsRepository.load(),
+            policy: CountdownTargetPolicy(
+                events: await settingsRepository.load(),
+                calendars: await calendarSettingsRepository.load()
+            ),
             rangeEnd: interval.end,
             calendar: dateProvider.calendar
         )
     }
 }
 
-public struct LoadCountdownTargetSettingsUseCase: Sendable {
-    private let repository: any CountdownTargetSettingsRepository
+/// 予定ごとの選択とカレンダーごとの設定を読み、残り時間の対象の判定にして返す。
+public struct LoadCountdownTargetPolicyUseCase: Sendable {
+    private let settingsRepository: any CountdownTargetSettingsRepository
+    private let calendarSettingsRepository: any CountdownCalendarSettingsRepository
 
-    public init(repository: any CountdownTargetSettingsRepository) {
+    public init(
+        settingsRepository: any CountdownTargetSettingsRepository,
+        calendarSettingsRepository: any CountdownCalendarSettingsRepository
+    ) {
+        self.settingsRepository = settingsRepository
+        self.calendarSettingsRepository = calendarSettingsRepository
+    }
+
+    public func execute() async -> CountdownTargetPolicy {
+        CountdownTargetPolicy(
+            events: await settingsRepository.load(),
+            calendars: await calendarSettingsRepository.load()
+        )
+    }
+}
+
+public struct LoadCountdownCalendarSettingsUseCase: Sendable {
+    private let repository: any CountdownCalendarSettingsRepository
+
+    public init(repository: any CountdownCalendarSettingsRepository) {
         self.repository = repository
     }
 
-    public func execute() async -> CountdownTargetSettings {
+    public func execute() async -> CountdownCalendarSettings {
         await repository.load()
+    }
+}
+
+public struct SetCountdownCalendarIncludedUseCase: Sendable {
+    private let repository: any CountdownCalendarSettingsRepository
+
+    public init(repository: any CountdownCalendarSettingsRepository) {
+        self.repository = repository
+    }
+
+    /// カレンダーを残り時間に含めるか、含めないかを保存する。予定ごとの選択は変えない。
+    ///
+    /// - Throws: 保存に失敗したとき。
+    public func execute(calendar: UserCalendar.Identity, isIncluded: Bool) async throws {
+        try await repository.update { settings in
+            if isIncluded {
+                settings.include(calendar)
+            } else {
+                settings.exclude(calendar)
+            }
+        }
     }
 }
 

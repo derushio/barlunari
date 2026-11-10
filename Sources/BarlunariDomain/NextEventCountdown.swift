@@ -2,7 +2,7 @@ import Foundation
 
 /// 次の予定の開始までの残り時間。メニューバーの項目に `HH:mm` で出す。
 ///
-/// 対象になる予定は、`CountdownTargetSettings` で対象になり、開始が現在より後で、残りが 24 時間未満のもの（表示の最大は `23:59`）。
+/// 対象になる予定は、`CountdownTargetPolicy` で対象になり、開始が現在より後で、残りが 24 時間未満のもの（表示の最大は `23:59`）。
 /// 自分が辞退した予定（`attendance == .declined`）は、設定にかかわらず数えない。ほかの参加状況は見ない。終日の予定は、対象にしたときだけ数え、開始はその日の 0:00 とする。
 public struct NextEventCountdown: Sendable, Hashable {
     /// 表示する残り時間の上限（分）。これ以上先の予定は対象にしない。
@@ -40,17 +40,17 @@ public struct NextEventCountdown: Sendable, Hashable {
         }
     }
 
-    /// `events` の中で、`settings` で対象になる予定のうち開始が最も早いものまでの残り時間。対象がなければ `nil`。
+    /// `events` の中で、`policy` で対象になる予定のうち開始が最も早いものまでの残り時間。対象がなければ `nil`。
     ///
     /// 自分が辞退した予定は、設定にかかわらず数えない。ほかの参加状況は見ない。開始が `now` 以前の予定と、残りが 24 時間以上先の予定は対象にならない。
     public static func next(
         in events: [CalendarEvent],
-        settings: CountdownTargetSettings,
+        policy: CountdownTargetPolicy,
         at now: Date,
         calendar: Calendar
     ) -> NextEventCountdown? {
         var earliest: NextEventCountdown?
-        for event in events where event.attendance != .declined && settings.isTarget(event) {
+        for event in events where event.attendance != .declined && policy.isTarget(event) {
             guard let countdown = NextEventCountdown(start: start(of: event, calendar: calendar), now: now)
             else { continue }
             if earliest.map({ countdown.start < $0.start }) ?? true { earliest = countdown }

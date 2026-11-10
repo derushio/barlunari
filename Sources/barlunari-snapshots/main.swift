@@ -53,7 +53,9 @@ struct Fixture {
         showDeclinedEvents: Bool? = nil,
         firstWeekday: Weekday? = nil,
         rsvpFailure: (any Error)? = nil,
-        rsvpOutcome: EventResponseOutcome = .saved
+        rsvpOutcome: EventResponseOutcome = .saved,
+        hiddenCalendars: [UserCalendar] = [],
+        countdownExcludedCalendars: [UserCalendar] = []
     ) {
         responder = FakeEventResponder(failure: rsvpFailure, outcome: rsvpOutcome)
         let firstWeekdayStore = InMemoryFirstWeekdayStore(value: firstWeekday)
@@ -62,8 +64,13 @@ struct Fixture {
         let calendarRepository = InMemoryCalendarRepository(accounts: accounts, calendars: calendars)
         let eventRepository = SnapshotEventRepository(events: sampleEvents, error: eventError)
         events = eventRepository
-        let visibility = InMemoryCalendarVisibilityRepository()
+        var hidden = CalendarVisibility()
+        hiddenCalendars.forEach { hidden.hide($0.id) }
+        let visibility = InMemoryCalendarVisibilityRepository(visibility: hidden)
         let countdownSettings = InMemoryCountdownTargetSettingsRepository()
+        let countdownCalendarSettings = InMemoryCountdownCalendarSettingsRepository(
+            settings: CountdownCalendarSettings(excludedCalendars: Set(countdownExcludedCalendars.map(\.id)))
+        )
         let launchAtLogin = FakeLaunchAtLoginService(isEnabled: true)
         let requestAccess = RequestCalendarAccessUseCase(authorizer: authorizer)
         let openSystemSettings = OpenSystemSettingsUseCase(opener: FakeSystemSettingsOpener())
@@ -94,7 +101,9 @@ struct Fixture {
                 authorizer: authorizer, calendarRepository: calendarRepository, visibilityRepository: visibility
             ),
             setCalendarVisibility: SetCalendarVisibilityUseCase(visibilityRepository: visibility),
-            loadCountdownSettings: LoadCountdownTargetSettingsUseCase(repository: countdownSettings),
+            loadCountdownPolicy: LoadCountdownTargetPolicyUseCase(
+                settingsRepository: countdownSettings, calendarSettingsRepository: countdownCalendarSettings
+            ),
             setCountdownTarget: SetCountdownTargetUseCase(repository: countdownSettings),
             workspaceNotificationCenter: NotificationCenter()
         )
@@ -109,6 +118,8 @@ struct Fixture {
                 authorizer: authorizer, calendarRepository: calendarRepository, visibilityRepository: visibility
             ),
             setCalendarVisibility: SetCalendarVisibilityUseCase(visibilityRepository: visibility),
+            loadCountdownCalendarSettings: LoadCountdownCalendarSettingsUseCase(repository: countdownCalendarSettings),
+            setCountdownCalendarIncluded: SetCountdownCalendarIncludedUseCase(repository: countdownCalendarSettings),
             requestCalendarAccess: requestAccess,
             openSystemSettings: openSystemSettings,
             changeNotifier: notifier
@@ -275,6 +286,18 @@ func runSnapshots(outputDirectory: URL) async throws {
             await fixture.popover.waitForLoad()
             fixture.popover.showDetail(of: id)
             try await render(popoverView(fixture), appearance: appearance, to: output("\(name)-\(suffix)"))
+        }
+    }
+
+    // カレンダーの設定で残り時間に含めない予定の詳細。チェックがオフで、説明が出る。チェックを入れた後は、記号の付く予定になる。
+    for (isIncluded, tag) in [(false, "off"), (true, "on")] {
+        for (suffix, appearance) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua)] {
+            let fixture = Fixture(countdownExcludedCalendars: [SampleData.workCalendar])
+            fixture.popover.reload()
+            await fixture.popover.waitForLoad()
+            try showDetail(titled: "デザインレビュー", in: fixture)
+            if isIncluded { await fixture.popover.setIncludedInCountdown(true) }
+            try await render(popoverView(fixture), appearance: appearance, to: output("popover-detail-countdown-calendar-excluded-\(tag)-\(suffix)"))
         }
     }
 
@@ -571,6 +594,17 @@ func runSnapshots(outputDirectory: URL) async throws {
     }
     // アプリと同じタイトルバー付きのウインドウ。タブの切り替えの部品とタイトルバーの間の余白を確かめる。
     try await renderSettingsWindow(settings.settings, to: output("settings-window-light"))
+
+    // 設定の「残り時間」タブ。すべて含める状態と、「仕事」を含めず「日本の祝日」（Google）を非表示にした状態。
+    for (name, fixture) in [
+        ("settings-countdown", Fixture()),
+        ("settings-countdown-excluded", Fixture(
+            hiddenCalendars: [SampleData.holidayCalendar], countdownExcludedCalendars: [SampleData.workCalendar]
+        )),
+    ] {
+        await fixture.settings.load()
+        try await render(SettingsView(viewModel: fixture.settings, initialTab: .countdown), appearance: .aqua, to: output(name))
+    }
 
     // 「辞退した予定を表示」をオフにして保存したあとに開いた一般タブ。
     let settingsDeclinedOff = Fixture(showDeclinedEvents: false)

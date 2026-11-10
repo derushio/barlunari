@@ -32,3 +32,13 @@ public protocol CountdownTargetSettingsRepository: Sendable {
     /// 実装は呼び出しを直列化する。保存に失敗したら投げ、そのときは変更を保存しない。
     func update(_ body: @Sendable (inout CountdownTargetSettings) -> Void) async throws
 }
+
+/// メニューバーの残り時間に含めないカレンダーの設定の保存先。予定ごとの設定（`CountdownTargetSettingsRepository`）とは別に持つ。
+public protocol CountdownCalendarSettingsRepository: Sendable {
+    func load() async -> CountdownCalendarSettings
+
+    /// 保存済みの集約を読み、`body` で変更して保存するまでを原子的に行う。
+    ///
+    /// 同時に呼ばれても、互いの変更を失わない。保存に失敗したら投げ、そのときは変更を保存しない。
+    func update(_ body: @Sendable (inout CountdownCalendarSettings) -> Void) async throws
+}

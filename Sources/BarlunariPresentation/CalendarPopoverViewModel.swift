@@ -137,8 +137,8 @@ public final class CalendarPopoverViewModel {
     /// 保存の前に始まった読み込みの結果は、保存前の出欠を持つため、照合に使わない。
     private var respondedEventGeneration = 0
 
-    /// メニューバーの残り時間の対象にするかの設定。予定の読み込みのたびに読み直す。詳細のチェックボックスの状態だけに使う。
-    private var countdownSettings = CountdownTargetSettings()
+    /// メニューバーの残り時間の対象にするかの判定（予定ごとの選択とカレンダーごとの設定）。予定の読み込みのたびに読み直す。記号と詳細のチェックボックスの状態に使う。
+    private var countdownPolicy = CountdownTargetPolicy()
 
     /// 許可を求めている間は `true`。許可のダイアログは 1 つしか出せないため、続けて押されても求め直さない。
     public private(set) var isRequestingAccess = false
@@ -156,7 +156,7 @@ public final class CalendarPopoverViewModel {
     private let saveDisplayMode: SaveDisplayModeUseCase
     private let listCalendars: ListCalendarsUseCase
     private let setCalendarVisibility: SetCalendarVisibilityUseCase
-    private let loadCountdownSettings: LoadCountdownTargetSettingsUseCase
+    private let loadCountdownPolicy: LoadCountdownTargetPolicyUseCase
     private let setCountdownTarget: SetCountdownTargetUseCase
 
     public init(
@@ -173,7 +173,7 @@ public final class CalendarPopoverViewModel {
         saveDisplayMode: SaveDisplayModeUseCase,
         listCalendars: ListCalendarsUseCase,
         setCalendarVisibility: SetCalendarVisibilityUseCase,
-        loadCountdownSettings: LoadCountdownTargetSettingsUseCase,
+        loadCountdownPolicy: LoadCountdownTargetPolicyUseCase,
         setCountdownTarget: SetCountdownTargetUseCase,
         workspaceNotificationCenter: NotificationCenter,
         notificationCenter: NotificationCenter = .default
@@ -191,7 +191,7 @@ public final class CalendarPopoverViewModel {
         self.saveDisplayMode = saveDisplayMode
         self.listCalendars = listCalendars
         self.setCalendarVisibility = setCalendarVisibility
-        self.loadCountdownSettings = loadCountdownSettings
+        self.loadCountdownPolicy = loadCountdownPolicy
         self.setCountdownTarget = setCountdownTarget
         self.displayMode = loadDisplayMode.execute()
 
@@ -364,12 +364,12 @@ public final class CalendarPopoverViewModel {
             if let events = eventsByDay[day] { weekEvents[day] = events }
         }
         let colors = calendarColors
-        let settings = countdownSettings
+        let policy = countdownPolicy
         return MonthWeekLayout(
             days: days,
             eventsByDay: weekEvents,
             color: { colors[$0.calendarIdentity] },
-            countdownMark: { CountdownMark($0, settings: settings) },
+            countdownMark: { CountdownMark($0, policy: policy) },
             now: dateProvider.now,
             calendar: dateProvider.calendar,
             formatter: formatter
@@ -452,7 +452,7 @@ public final class CalendarPopoverViewModel {
                 calendarName: snapshot.calendar(for: event.calendarIdentity)?.name,
                 isPast: event.schedule.hasEnded(on: day, at: now, calendar: calendar),
                 attendance: ListedAttendance(event),
-                countdownMark: CountdownMark(event, settings: countdownSettings)
+                countdownMark: CountdownMark(event, policy: countdownPolicy)
             )
         }
 
@@ -831,15 +831,15 @@ public final class CalendarPopoverViewModel {
     /// 予定は読み込み直さない。どの予定でも切り替えられる（終日、開始済み、辞退も含む）。すでにその状態のときは何もしない。
     public func setIncludedInCountdown(_ included: Bool) async {
         guard let id = detailEventID, let event = detailEvent(for: id),
-              countdownSettings.isTarget(event) != included
+              countdownPolicy.isTarget(event) != included
         else { return }
-        let previous = countdownSettings
-        countdownSettings.set(id, isTarget: included)
+        let previous = countdownPolicy
+        countdownPolicy.choose(id, isTarget: included)
         invalidateCountdownMarks()
         do {
             try await setCountdownTarget.execute(event: id, isTarget: included)
         } catch {
-            countdownSettings = previous
+            countdownPolicy = previous
             invalidateCountdownMarks()
             return
         }
@@ -1107,9 +1107,9 @@ public final class CalendarPopoverViewModel {
 
         do {
             let newSnapshot = try await loadAgenda.execute(range: range)
-            let settings = await loadCountdownSettings.execute()
+            let policy = await loadCountdownPolicy.execute()
             guard isCurrent(generation) else { return }
-            countdownSettings = settings
+            countdownPolicy = policy
             setSnapshot(newSnapshot)
             loadedRange = range
             lastUpdated = dateProvider.now
@@ -1204,7 +1204,7 @@ public final class CalendarPopoverViewModel {
             isPast: event.schedule.hasEnded(on: day, at: now, calendar: calendar),
             hasMeetingURL: event.meetingURL != nil,
             attendance: ListedAttendance(event),
-            countdownMark: CountdownMark(event, settings: countdownSettings)
+            countdownMark: CountdownMark(event, policy: countdownPolicy)
         )
     }
 
@@ -1221,7 +1221,8 @@ public final class CalendarPopoverViewModel {
             meetingURL: event.meetingURL,
             detailURL: event.detailURL,
             attendanceText: event.attendance.displayText,
-            includedInCountdown: countdownSettings.isTarget(event),
+            includedInCountdown: countdownPolicy.isTarget(event),
+            isCalendarExcludedFromCountdown: !countdownPolicy.calendars.isIncluded(event.calendarIdentity),
             isDeclined: event.attendance == .declined,
             rsvp: event.canRespond ? rsvpState(for: event) : nil,
             participants: event.participants.enumerated().map { index, participant in

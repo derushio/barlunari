@@ -27,6 +27,7 @@ import Testing
                 eventRepository: harness.eventRepository,
                 visibilityRepository: harness.visibility,
                 settingsRepository: harness.countdownSettings,
+                calendarSettingsRepository: harness.countdownCalendarSettings,
                 dateProvider: harness.overridingDateProvider
             ),
             dateProvider: harness.overridingDateProvider,
