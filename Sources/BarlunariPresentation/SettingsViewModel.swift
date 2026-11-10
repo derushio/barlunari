@@ -3,7 +3,7 @@ import BarlunariApplication
 import BarlunariDomain
 import Observation
 
-/// 設定画面の状態と操作。一般・カレンダーの 2 タブ分を持つ。
+/// 設定画面の状態と操作。一般・カレンダー・残り時間の 3 タブ分を持つ。
 @MainActor
 @Observable
 public final class SettingsViewModel {
@@ -30,6 +30,11 @@ public final class SettingsViewModel {
     public private(set) var accounts: [UserAccount] = []
     public private(set) var calendarsPhase: CalendarsPhase = .idle
     public private(set) var calendarsError: String?
+    /// メニューバーの残り時間に含めないカレンダー。残り時間のタブのチェックボックスの状態になる。予定ごとの選択とは別に持つ。
+    public private(set) var countdownCalendarSettings = CountdownCalendarSettings()
+    /// 残り時間のタブの保存に失敗したときの、利用者に見せる文。
+    public private(set) var countdownError: String?
+
     /// 許可を求めている間は `true`。許可のダイアログは 1 つしか出せないため、続けて押されても求め直さない。
     public private(set) var isRequestingAccess = false
 
@@ -46,6 +51,8 @@ public final class SettingsViewModel {
     private let saveFirstWeekday: SaveFirstWeekdayUseCase
     private let listCalendars: ListCalendarsUseCase
     private let setCalendarVisibility: SetCalendarVisibilityUseCase
+    private let loadCountdownCalendarSettings: LoadCountdownCalendarSettingsUseCase
+    private let setCountdownCalendarIncluded: SetCountdownCalendarIncludedUseCase
     private let requestCalendarAccess: RequestCalendarAccessUseCase
     private let openSystemSettings: OpenSystemSettingsUseCase
     private let changeNotifier: DataChangeNotifier
@@ -59,6 +66,8 @@ public final class SettingsViewModel {
         saveFirstWeekday: SaveFirstWeekdayUseCase,
         listCalendars: ListCalendarsUseCase,
         setCalendarVisibility: SetCalendarVisibilityUseCase,
+        loadCountdownCalendarSettings: LoadCountdownCalendarSettingsUseCase,
+        setCountdownCalendarIncluded: SetCountdownCalendarIncludedUseCase,
         requestCalendarAccess: RequestCalendarAccessUseCase,
         openSystemSettings: OpenSystemSettingsUseCase,
         changeNotifier: DataChangeNotifier,
@@ -72,6 +81,8 @@ public final class SettingsViewModel {
         self.saveFirstWeekday = saveFirstWeekday
         self.listCalendars = listCalendars
         self.setCalendarVisibility = setCalendarVisibility
+        self.loadCountdownCalendarSettings = loadCountdownCalendarSettings
+        self.setCountdownCalendarIncluded = setCountdownCalendarIncluded
         self.requestCalendarAccess = requestCalendarAccess
         self.openSystemSettings = openSystemSettings
         self.changeNotifier = changeNotifier
@@ -155,6 +166,8 @@ public final class SettingsViewModel {
 
     public func reloadCalendars() async {
         calendarsError = nil
+        countdownError = nil
+        countdownCalendarSettings = await loadCountdownCalendarSettings.execute()
         // 読み込み済みの一覧は、読み直すあいだも出したままにする。
         if calendarsPhase != .loaded { calendarsPhase = .loading }
         do {
@@ -219,6 +232,45 @@ public final class SettingsViewModel {
                 calendars[current] = previous
             }
             calendarsError = UserFacingMessage.text(for: error)
+        }
+    }
+
+    // MARK: - 残り時間
+
+    /// カレンダーを残り時間に含めるか。含めないカレンダーの集合にないものは含める。
+    public func isIncludedInCountdown(_ id: UserCalendar.Identity) -> Bool {
+        countdownCalendarSettings.isIncluded(id)
+    }
+
+    /// 含めないカレンダーの名前を、一覧の順に並べたもの。含めないカレンダーがなければ空。操作ツールの状態の行に使う。
+    public var countdownExcludedCalendarNames: [String] {
+        calendars.filter { !countdownCalendarSettings.isIncluded($0.id) }.map(\.calendar.name)
+    }
+
+    /// 画面の反応を速くするため先に表示を変え、失敗したら元に戻す。保存できたら変更を通知し、メニューバーの残り時間とポップオーバーが読み直す。
+    ///
+    /// 予定ごとの選択は変えない。非表示のカレンダーも設定を変えられる（表示に戻したときに効く）が、画面では操作できない。
+    public func setIncludedInCountdown(_ calendarID: UserCalendar.Identity, isIncluded: Bool) async {
+        let previous = countdownCalendarSettings
+        if isIncluded {
+            countdownCalendarSettings.include(calendarID)
+        } else {
+            countdownCalendarSettings.exclude(calendarID)
+        }
+        countdownError = nil
+        do {
+            try await setCountdownCalendarIncluded.execute(calendar: calendarID, isIncluded: isIncluded)
+            notifyChange()
+        } catch {
+            // 失敗した操作だけを戻す。待っている間に別のカレンダーを変えていても、その変更は残す。
+            if isIncluded == countdownCalendarSettings.isIncluded(calendarID) {
+                if previous.isIncluded(calendarID) {
+                    countdownCalendarSettings.include(calendarID)
+                } else {
+                    countdownCalendarSettings.exclude(calendarID)
+                }
+            }
+            countdownError = UserFacingMessage.text(for: error)
         }
     }
 }

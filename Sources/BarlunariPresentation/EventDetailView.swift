@@ -144,6 +144,12 @@ struct EventDetailView: View {
                     .foregroundStyle(.secondary)
                     .padding(.leading, Self.iconColumnWidth + Self.iconTextSpacing)
             }
+            if detail.isCalendarExcludedFromCountdown {
+                Text("カレンダーの設定で残り時間に含めていません。この予定のチェックが優先されます。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .padding(.leading, Self.iconColumnWidth + Self.iconTextSpacing)
+            }
         }
     }
 

@@ -8,7 +8,7 @@ public struct SettingsView: View {
     public static let height: CGFloat = 460
 
     public enum Tab: Hashable, Sendable {
-        case general, calendars
+        case general, calendars, countdown
     }
 
     @Bindable private var viewModel: SettingsViewModel
@@ -28,6 +28,9 @@ public struct SettingsView: View {
             CalendarsSettingsTab(viewModel: viewModel)
                 .tabItem { Label("カレンダー", systemImage: "calendar") }
                 .tag(Tab.calendars)
+            CountdownSettingsTab(viewModel: viewModel)
+                .tabItem { Label("残り時間", systemImage: "clock") }
+                .tag(Tab.countdown)
         }
         // TabView はタブの切り替えの部品を枠の上辺に重ねて描く。周りに余白を取らないと、部品がタイトルバーの区切り線に接し、
         // 枠の線がウインドウの端に重なる。
@@ -80,6 +83,67 @@ private struct GeneralSettingsTab: View {
             }
         }
         .formStyle(.grouped)
+    }
+}
+
+/// メニューバーの残り時間に含めるカレンダーを選ぶタブ。階層のある設定なので、スイッチでなくチェックボックスを使う。
+private struct CountdownSettingsTab: View {
+    @Environment(\.colorScheme) private var colorScheme
+    @Bindable var viewModel: SettingsViewModel
+
+    var body: some View {
+        switch viewModel.calendarsPhase {
+        case .idle, .loading:
+            ProgressView().controlSize(.small).frame(maxWidth: .infinity, maxHeight: .infinity)
+        case .failed(let message):
+            Form { Section { Text(message).foregroundStyle(.secondary) } }
+                .formStyle(.grouped)
+        case .guide(let guide):
+            Form { Section { Text(guide.message).foregroundStyle(.secondary) } }
+                .formStyle(.grouped)
+        case .loaded:
+            Form {
+                Section {
+                    Text("チェックを外したカレンダーの予定は、メニューバーの残り時間に含めません。予定の詳細のチェックボックスで、予定ごとに選んだ設定が優先されます。")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                ForEach(viewModel.calendarSections) { section in
+                    Section(section.title) {
+                        ForEach(section.items) { item in
+                            row(item)
+                        }
+                    }
+                }
+                if let error = viewModel.countdownError {
+                    Text(error).font(.caption).foregroundStyle(.red)
+                }
+            }
+            .formStyle(.grouped)
+        }
+    }
+
+    private func row(_ item: CalendarListItem) -> some View {
+        HStack(spacing: 8) {
+            Toggle(isOn: Binding(
+                get: { viewModel.isIncludedInCountdown(item.id) },
+                set: { included in Task { await viewModel.setIncludedInCountdown(item.id, isIncluded: included) } }
+            )) {
+                HStack(spacing: 8) {
+                    Circle().fill(item.calendar.color.paletteRoles(colorScheme).accentColor).frame(width: 10, height: 10)
+                    Text(item.calendar.name)
+                }
+            }
+            .toggleStyle(.checkbox)
+            // 非表示のカレンダーは予定を取得しないので、残り時間にも数えない。
+            .disabled(!item.isVisible)
+            if !item.isVisible {
+                Spacer()
+                Text("非表示のカレンダーです")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
     }
 }
 
