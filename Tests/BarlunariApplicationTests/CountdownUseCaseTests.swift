@@ -17,7 +17,8 @@ import Testing
         calendars: [UserCalendar]? = nil,
         events: any CalendarEventRepository,
         visibility: CalendarVisibility = CalendarVisibility(),
-        settings: CountdownTargetSettings = CountdownTargetSettings()
+        settings: CountdownTargetSettings = CountdownTargetSettings(),
+        calendarSettings: CountdownCalendarSettings = CountdownCalendarSettings()
     ) -> LoadUpcomingEventsUseCase {
         LoadUpcomingEventsUseCase(
             authorizer: FakeCalendarAccessAuthorizer(status: status),
@@ -27,6 +28,7 @@ import Testing
             eventRepository: events,
             visibilityRepository: InMemoryCalendarVisibilityRepository(visibility: visibility),
             settingsRepository: InMemoryCountdownTargetSettingsRepository(settings: settings),
+            calendarSettingsRepository: InMemoryCountdownCalendarSettingsRepository(settings: calendarSettings),
             dateProvider: FixedDateProvider()
         )
     }
@@ -81,8 +83,23 @@ import Testing
         settings.set(first.id, isTarget: false)
         let upcoming = try await makeUseCase(events: RecordingEventRepository(events: [first, second]), settings: settings)
             .execute()
-        #expect(upcoming.settings == settings)
+        #expect(upcoming.policy.events == settings)
         #expect(upcoming.countdown(at: now)?.remainingMinutes == 180)
+    }
+
+    @Test func 含めないカレンダーの予定は数えず予定ごとの選択が優先される() async throws {
+        let inWork = Fixtures.event("work", calendar: "work", hour: 13)
+        let inPersonal = Fixtures.event("personal", calendar: "personal", hour: 15)
+        let calendarSettings = CountdownCalendarSettings(excludedCalendars: [work.id])
+        let events = RecordingEventRepository(events: [inWork, inPersonal])
+        let upcoming = try await makeUseCase(events: events, calendarSettings: calendarSettings).execute()
+        #expect(upcoming.policy.calendars == calendarSettings)
+        #expect(upcoming.countdown(at: now)?.remainingMinutes == 180)
+
+        var settings = CountdownTargetSettings()
+        settings.set(inWork.id, isTarget: true)
+        let chosen = try await makeUseCase(events: events, settings: settings, calendarSettings: calendarSettings).execute()
+        #expect(chosen.countdown(at: now)?.remainingMinutes == 60)
     }
 
     @Test func 辞退した予定は設定が対象でも残り時間に数えない() async throws {
@@ -119,11 +136,11 @@ import Testing
         let repository = InMemoryCountdownTargetSettingsRepository()
         let useCase = SetCountdownTargetUseCase(repository: repository)
         try await useCase.execute(event: identity("a"), isTarget: false)
-        #expect(await !repository.load().isTarget(event("a")))
+        #expect(await repository.load().choice(for: identity("a")) == false)
         try await useCase.execute(event: identity("a"), isTarget: true)
-        #expect(await repository.load().isTarget(event("a")))
+        #expect(await repository.load().choice(for: identity("a")) == true)
         try await useCase.execute(event: identity("b"), isTarget: true)
-        #expect(await repository.load().isTarget(event("b", allDay: true)))
+        #expect(await repository.load().choice(for: identity("b")) == true)
     }
 
     @Test func 開始を過ぎた予定の設定も消えない() async throws {
@@ -135,7 +152,7 @@ import Testing
         )
         try await useCase.execute(event: past.id, isTarget: false)
         try await useCase.execute(event: identity("other"), isTarget: false)
-        #expect(await !repository.load().isTarget(past))
+        #expect(await repository.load().choice(for: past.id) == false)
     }
 
     @Test func 保存に失敗したら投げて変更を保存しない() async {
@@ -151,7 +168,53 @@ import Testing
     @Test func 読み込みは保存した設定を返す() async {
         var initial = CountdownTargetSettings()
         initial.set(identity("a"), isTarget: false)
-        let useCase = LoadCountdownTargetSettingsUseCase(repository: InMemoryCountdownTargetSettingsRepository(settings: initial))
+        let excluded = CountdownCalendarSettings(excludedCalendars: [
+            UserCalendar.Identity(accountID: account, calendarID: try! CalendarID("work")),
+        ])
+        let useCase = LoadCountdownTargetPolicyUseCase(
+            settingsRepository: InMemoryCountdownTargetSettingsRepository(settings: initial),
+            calendarSettingsRepository: InMemoryCountdownCalendarSettingsRepository(settings: excluded)
+        )
+        #expect(await useCase.execute() == CountdownTargetPolicy(events: initial, calendars: excluded))
+    }
+}
+
+@Suite struct SetCountdownCalendarIncludedUseCaseTests {
+    let calendar = UserCalendar.Identity(accountID: SampleData.googleAccount.id, calendarID: try! CalendarID("work"))
+
+    @Test func 含めないにも含めるにも切り替えて保存できる() async throws {
+        let repository = InMemoryCountdownCalendarSettingsRepository()
+        let useCase = SetCountdownCalendarIncludedUseCase(repository: repository)
+        try await useCase.execute(calendar: calendar, isIncluded: false)
+        #expect(await repository.load().excludedCalendars == [calendar])
+        try await useCase.execute(calendar: calendar, isIncluded: true)
+        #expect(await repository.load().excludedCalendars.isEmpty)
+    }
+
+    @Test func カレンダーの設定を変えても予定ごとの選択は変わらない() async throws {
+        var chosen = CountdownTargetSettings()
+        let event = CalendarEvent.Identity(accountID: calendar.accountID, calendarID: calendar.calendarID, eventID: try EventID("a"))
+        chosen.set(event, isTarget: false)
+        let events = InMemoryCountdownTargetSettingsRepository(settings: chosen)
+        let useCase = SetCountdownCalendarIncludedUseCase(repository: InMemoryCountdownCalendarSettingsRepository())
+        try await useCase.execute(calendar: calendar, isIncluded: false)
+        try await useCase.execute(calendar: calendar, isIncluded: true)
+        #expect(await events.load() == chosen)
+    }
+
+    @Test func 保存に失敗したら投げて変更を保存しない() async {
+        struct SaveFailure: Error {}
+        let repository = InMemoryCountdownCalendarSettingsRepository(error: SaveFailure())
+        let useCase = SetCountdownCalendarIncludedUseCase(repository: repository)
+        await #expect(throws: SaveFailure.self) {
+            try await useCase.execute(calendar: calendar, isIncluded: false)
+        }
+        #expect(await repository.load() == CountdownCalendarSettings())
+    }
+
+    @Test func 読み込みは保存した設定を返す() async {
+        let initial = CountdownCalendarSettings(excludedCalendars: [calendar])
+        let useCase = LoadCountdownCalendarSettingsUseCase(repository: InMemoryCountdownCalendarSettingsRepository(settings: initial))
         #expect(await useCase.execute() == initial)
     }
 }
