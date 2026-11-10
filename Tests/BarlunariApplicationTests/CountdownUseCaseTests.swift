@@ -17,7 +17,7 @@ import Testing
         calendars: [UserCalendar]? = nil,
         events: any CalendarEventRepository,
         visibility: CalendarVisibility = CalendarVisibility(),
-        exclusions: CountdownExclusions = CountdownExclusions()
+        settings: CountdownTargetSettings = CountdownTargetSettings()
     ) -> LoadUpcomingEventsUseCase {
         LoadUpcomingEventsUseCase(
             authorizer: FakeCalendarAccessAuthorizer(status: status),
@@ -26,7 +26,7 @@ import Testing
             ),
             eventRepository: events,
             visibilityRepository: InMemoryCalendarVisibilityRepository(visibility: visibility),
-            exclusionRepository: InMemoryCountdownExclusionRepository(exclusions: exclusions),
+            settingsRepository: InMemoryCountdownTargetSettingsRepository(settings: settings),
             dateProvider: FixedDateProvider()
         )
     }
@@ -61,7 +61,7 @@ import Testing
         #expect(await events.requestedIntervals.isEmpty)
     }
 
-    @Test func 辞退した予定を除き重複を一つにする() async throws {
+    @Test func 辞退した予定も取得し重複を一つにする() async throws {
         let events = RecordingEventRepository(events: [
             Fixtures.event("declined", calendar: "work", hour: 13, attendance: .declined),
             Fixtures.event("a", calendar: "work", hour: 14, uid: "same"),
@@ -71,24 +71,33 @@ import Testing
         let upcoming = try await makeUseCase(
             accounts: [accountA, accountB], calendars: [work, work2], events: events
         ).execute()
-        #expect(upcoming.events.map(\.eventID.rawValue) == ["a"])
+        #expect(upcoming.events.map(\.eventID.rawValue).sorted() == ["a", "declined"])
     }
 
-    @Test func 除外の集合を一緒に返し残り時間の計算に使える() async throws {
+    @Test func 設定を一緒に返し残り時間の計算に使える() async throws {
         let first = Fixtures.event("first", calendar: "work", hour: 13)
         let second = Fixtures.event("second", calendar: "work", hour: 15)
-        var exclusions = CountdownExclusions()
-        exclusions.exclude(first.id, start: Fixtures.date(2026, 10, 24, 13))
-        let upcoming = try await makeUseCase(events: RecordingEventRepository(events: [first, second]), exclusions: exclusions)
+        var settings = CountdownTargetSettings()
+        settings.set(first.id, isTarget: false)
+        let upcoming = try await makeUseCase(events: RecordingEventRepository(events: [first, second]), settings: settings)
             .execute()
-        #expect(upcoming.exclusions == exclusions)
+        #expect(upcoming.settings == settings)
+        #expect(upcoming.countdown(at: now)?.remainingMinutes == 180)
+    }
+
+    @Test func 辞退した予定は設定が対象でも残り時間に数えない() async throws {
+        let declined = Fixtures.event("declined", calendar: "work", hour: 13, attendance: .declined)
+        let later = Fixtures.event("later", calendar: "work", hour: 15)
+        var settings = CountdownTargetSettings()
+        settings.set(declined.id, isTarget: true)
+        let upcoming = try await makeUseCase(events: RecordingEventRepository(events: [declined, later]), settings: settings)
+            .execute()
         #expect(upcoming.countdown(at: now)?.remainingMinutes == 180)
     }
 }
 
-@Suite struct SetCountdownExclusionUseCaseTests {
+@Suite struct SetCountdownTargetUseCaseTests {
     let account = SampleData.googleAccount.id
-    let now = SampleData.now
 
     func identity(_ id: String) -> CalendarEvent.Identity {
         CalendarEvent.Identity(
@@ -96,43 +105,53 @@ import Testing
         )
     }
 
-    @Test func 除外して戻せる() async throws {
-        let repository = InMemoryCountdownExclusionRepository()
-        let useCase = SetCountdownExclusionUseCase(repository: repository, dateProvider: FixedDateProvider())
-        let start = now.addingTimeInterval(3600)
-        try await useCase.execute(event: identity("a"), start: start, isExcluded: true)
-        #expect(await repository.load().isExcluded(identity("a")))
-        try await useCase.execute(event: identity("a"), start: start, isExcluded: false)
-        #expect(await !repository.load().isExcluded(identity("a")))
+    func event(_ id: String, allDay: Bool = false) -> CalendarEvent {
+        let day = try! CalendarDay(year: 2026, month: 10, day: 25)
+        return CalendarEvent(
+            accountID: account, id: try! EventID(id), calendarID: try! CalendarID("work"), title: id,
+            schedule: allDay
+                ? .allDay(try! DayRange(start: day, end: try! CalendarDay(year: 2026, month: 10, day: 26)))
+                : .timed(DateInterval(start: SampleData.now.addingTimeInterval(3600), duration: 3600))
+        )
     }
 
-    @Test func 保存するとき開始が現在より前の項目を消す() async throws {
-        var initial = CountdownExclusions()
-        initial.exclude(identity("past"), start: now.addingTimeInterval(-1))
-        initial.exclude(identity("future"), start: now.addingTimeInterval(60))
-        let repository = InMemoryCountdownExclusionRepository(exclusions: initial)
-        let useCase = SetCountdownExclusionUseCase(repository: repository, dateProvider: FixedDateProvider())
-        try await useCase.execute(event: identity("new"), start: now.addingTimeInterval(3600), isExcluded: true)
-        let saved = await repository.load()
-        #expect(!saved.isExcluded(identity("past")))
-        #expect(saved.isExcluded(identity("future")))
-        #expect(saved.isExcluded(identity("new")))
+    @Test func 対象にも対象外にも切り替えて保存できる() async throws {
+        let repository = InMemoryCountdownTargetSettingsRepository()
+        let useCase = SetCountdownTargetUseCase(repository: repository)
+        try await useCase.execute(event: identity("a"), isTarget: false)
+        #expect(await !repository.load().isTarget(event("a")))
+        try await useCase.execute(event: identity("a"), isTarget: true)
+        #expect(await repository.load().isTarget(event("a")))
+        try await useCase.execute(event: identity("b"), isTarget: true)
+        #expect(await repository.load().isTarget(event("b", allDay: true)))
+    }
+
+    @Test func 開始を過ぎた予定の設定も消えない() async throws {
+        let repository = InMemoryCountdownTargetSettingsRepository()
+        let useCase = SetCountdownTargetUseCase(repository: repository)
+        let past = CalendarEvent(
+            accountID: account, id: try EventID("past"), calendarID: try CalendarID("work"), title: "past",
+            schedule: .timed(DateInterval(start: SampleData.now.addingTimeInterval(-7200), duration: 3600))
+        )
+        try await useCase.execute(event: past.id, isTarget: false)
+        try await useCase.execute(event: identity("other"), isTarget: false)
+        #expect(await !repository.load().isTarget(past))
     }
 
     @Test func 保存に失敗したら投げて変更を保存しない() async {
         struct SaveFailure: Error {}
-        let repository = InMemoryCountdownExclusionRepository(error: SaveFailure())
-        let useCase = SetCountdownExclusionUseCase(repository: repository, dateProvider: FixedDateProvider())
+        let repository = InMemoryCountdownTargetSettingsRepository(error: SaveFailure())
+        let useCase = SetCountdownTargetUseCase(repository: repository)
         await #expect(throws: SaveFailure.self) {
-            try await useCase.execute(event: identity("a"), start: now.addingTimeInterval(3600), isExcluded: true)
+            try await useCase.execute(event: identity("a"), isTarget: false)
         }
-        #expect(await repository.load() == CountdownExclusions())
+        #expect(await repository.load() == CountdownTargetSettings())
     }
 
-    @Test func 読み込みは保存した集合を返す() async {
-        var initial = CountdownExclusions()
-        initial.exclude(identity("a"), start: now.addingTimeInterval(60))
-        let useCase = LoadCountdownExclusionsUseCase(repository: InMemoryCountdownExclusionRepository(exclusions: initial))
+    @Test func 読み込みは保存した設定を返す() async {
+        var initial = CountdownTargetSettings()
+        initial.set(identity("a"), isTarget: false)
+        let useCase = LoadCountdownTargetSettingsUseCase(repository: InMemoryCountdownTargetSettingsRepository(settings: initial))
         #expect(await useCase.execute() == initial)
     }
 }
