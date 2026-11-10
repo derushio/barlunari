@@ -61,7 +61,7 @@ private struct GeneralSettingsTab: View {
                     get: { viewModel.showDeclinedEvents },
                     set: { viewModel.setShowDeclinedEvents($0) }
                 ))
-                Text("オフにすると、辞退した予定を予定の一覧、日の欄、月のマス目から除きます。")
+                Text("オフにすると、辞退した予定を予定の一覧と日の欄から除きます。月のマス目には、この設定によらず出しません。")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
