@@ -98,6 +98,8 @@ struct LaunchFailure: Error {}
                 visibilityRepository: harness.visibility
             ),
             setCalendarVisibility: SetCalendarVisibilityUseCase(visibilityRepository: harness.visibility),
+            loadCountdownCalendarSettings: LoadCountdownCalendarSettingsUseCase(repository: harness.countdownCalendarSettings),
+            setCountdownCalendarIncluded: SetCountdownCalendarIncludedUseCase(repository: harness.countdownCalendarSettings),
             requestCalendarAccess: RequestCalendarAccessUseCase(authorizer: harness.authorizer),
             openSystemSettings: OpenSystemSettingsUseCase(opener: harness.settingsOpener),
             changeNotifier: DataChangeNotifier(),

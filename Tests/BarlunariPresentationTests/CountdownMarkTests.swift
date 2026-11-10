@@ -15,15 +15,15 @@ import Testing
         let timed = try event(titled: "デザインレビュー")
         let allDay = try event(titled: "引っ越し")
         let settings = CountdownTargetSettings()
-        #expect(CountdownMark(timed, settings: settings) == .none)
-        #expect(CountdownMark(allDay, settings: settings) == .none)
+        #expect(CountdownMark(timed, policy: CountdownTargetPolicy(events: settings)) == .none)
+        #expect(CountdownMark(allDay, policy: CountdownTargetPolicy(events: settings)) == .none)
     }
 
     @Test func 対象から外した時刻付きの予定には外した記号を付ける() throws {
         let timed = try event(titled: "デザインレビュー")
         var settings = CountdownTargetSettings()
         settings.set(timed.id, isTarget: false)
-        #expect(CountdownMark(timed, settings: settings) == .excluded)
+        #expect(CountdownMark(timed, policy: CountdownTargetPolicy(events: settings)) == .excluded)
         #expect(CountdownMark.excluded.symbolName == "clock.badge.xmark")
         #expect(CountdownMark.excluded.label == "残り時間の対象外")
     }
@@ -32,7 +32,7 @@ import Testing
         let allDay = try event(titled: "引っ越し")
         var settings = CountdownTargetSettings()
         settings.set(allDay.id, isTarget: true)
-        #expect(CountdownMark(allDay, settings: settings) == .included)
+        #expect(CountdownMark(allDay, policy: CountdownTargetPolicy(events: settings)) == .included)
         #expect(CountdownMark.included.symbolName == "clock.badge.checkmark")
         #expect(CountdownMark.included.label == "残り時間の対象")
     }
@@ -41,7 +41,7 @@ import Testing
         let timed = try event(titled: "デザインレビュー")
         var settings = CountdownTargetSettings()
         settings.set(timed.id, isTarget: true)
-        #expect(CountdownMark(timed, settings: settings) == .none)
+        #expect(CountdownMark(timed, policy: CountdownTargetPolicy(events: settings)) == .none)
         #expect(CountdownMark.none.symbolName == nil)
         #expect(CountdownMark.none.label == nil)
     }
@@ -50,7 +50,33 @@ import Testing
         let declined = try event(titled: "辞退した会議")
         var settings = CountdownTargetSettings()
         settings.set(declined.id, isTarget: false)
-        #expect(CountdownMark(declined, settings: settings) == .excluded)
+        #expect(CountdownMark(declined, policy: CountdownTargetPolicy(events: settings)) == .excluded)
+    }
+
+    @Test func カレンダーごと含めないカレンダーの予定には一律に記号を付けない() throws {
+        let timed = try event(titled: "デザインレビュー")
+        let allDay = try event(titled: "開発合宿")
+        let policy = CountdownTargetPolicy(calendars: CountdownCalendarSettings(excludedCalendars: [timed.calendarIdentity]))
+        #expect(!policy.isTarget(timed))
+        #expect(CountdownMark(timed, policy: policy) == .none)
+        #expect(CountdownMark(allDay, policy: policy) == .none)
+    }
+
+    @Test func 含めないカレンダーの予定を予定ごとに含めると含めた記号を付ける() throws {
+        let timed = try event(titled: "デザインレビュー")
+        var policy = CountdownTargetPolicy(calendars: CountdownCalendarSettings(excludedCalendars: [timed.calendarIdentity]))
+        policy.choose(timed.id, isTarget: true)
+        #expect(CountdownMark(timed, policy: policy) == .included)
+        policy.choose(timed.id, isTarget: false)
+        #expect(CountdownMark(timed, policy: policy) == .none)
+    }
+
+    @Test func 含めるカレンダーの時刻付きの予定を外すと外した記号を付ける() throws {
+        let timed = try event(titled: "デザインレビュー")
+        let other = try event(titled: "夕食")
+        var policy = CountdownTargetPolicy(calendars: CountdownCalendarSettings(excludedCalendars: [other.calendarIdentity]))
+        policy.choose(timed.id, isTarget: false)
+        #expect(CountdownMark(timed, policy: policy) == .excluded)
     }
 
     @Test func 詳細で切り替えると日の欄と予定一覧と月のマス目の記号が更新される() async throws {
