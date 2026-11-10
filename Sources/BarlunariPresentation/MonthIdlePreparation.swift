@@ -6,7 +6,7 @@ enum MonthPrefetch {
     /// 一番上に一部でも見えている週から数えて、見えている週の数（6 週と、一部だけ見える 1 週）。
     static let visibleWeeks = WeekTimeline.visibleWeekCount + 1
     /// 見えている週の前後に、先に用意する週の数。
-    static let radius = 18
+    static let radius = 32
 
     /// 先に用意する週の番号。見えている週は含まない（描画のときに用意される）。見えている週に近い順で、後ろ（下）と前（上）を交互に並べる。
     /// 範囲は `0..<weekCount` に収める。

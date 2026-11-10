@@ -17,8 +17,8 @@ struct MonthWeekLayoutCache {
         let minute: Int
     }
 
-    /// 覚える週の数の上限。見えている週と前後の週と先に作る週を合わせた数より十分大きい。
-    static let defaultLimit = 64
+    /// 覚える週の数の上限。見えている週と、前後の先に作る週（`MonthPrefetch.radius` の両側）を合わせた数より大きい。上限を超えると半分に減らすので、先に作る週が足りなくなる。
+    static let defaultLimit = 128
 
     let limit: Int
     private(set) var stamp: Stamp?

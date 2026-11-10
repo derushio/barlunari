@@ -30,10 +30,11 @@ struct MonthCalendarView: View {
                     WeekScrollView(
                         viewModel: viewModel, rowHeight: rowHeight,
                         viewportHeight: rowHeight * CGFloat(MonthPopoverSizing.visibleWeekCount),
-                        preparesMonthEvents: true
-                    ) { index in
-                        MonthWeekRowView(viewModel: viewModel, weekIndex: index, rowHeight: rowHeight)
-                    }
+                        preparesMonthEvents: true,
+                        row: { MonthWeekCellsRow(viewModel: viewModel, weekIndex: $0) },
+                        shade: { MonthShadeStrip(viewModel: viewModel, rowHeight: rowHeight) },
+                        upperRow: { MonthWeekRowView(viewModel: viewModel, weekIndex: $0, rowHeight: rowHeight) }
+                    )
                     MonthStatusOverlay(viewModel: viewModel)
                 }
                 .frame(height: gridHeight, alignment: .top)
