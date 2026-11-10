@@ -605,9 +605,6 @@ func runSnapshots(outputDirectory: URL) async throws {
         await fixture.settings.load()
         try await render(SettingsView(viewModel: fixture.settings, initialTab: .countdown), appearance: .aqua, to: output(name))
     }
-    let settingsCountdownDark = Fixture(countdownExcludedCalendars: [SampleData.workCalendar])
-    await settingsCountdownDark.settings.load()
-    try await render(SettingsView(viewModel: settingsCountdownDark.settings, initialTab: .countdown), appearance: .darkAqua, to: output("settings-countdown-dark"))
 
     // 「辞退した予定を表示」をオフにして保存したあとに開いた一般タブ。
     let settingsDeclinedOff = Fixture(showDeclinedEvents: false)
