@@ -8,7 +8,7 @@ import Testing
 @testable import BarlunariPresentation
 
 @MainActor
-@Suite struct MenuBarCountdownTests {
+@Suite(.timeLimit(.minutes(1))) struct MenuBarCountdownTests {
     /// 現在は 2026-10-24 12:00。次の予定は 14:00 の「デザインレビュー」で、16:00 の会議は辞退している。
     func started(_ harness: Harness) async -> MenuBarCountdownViewModel {
         harness.countdown.start()
@@ -227,24 +227,5 @@ import Testing
         await waitUntil { countdown.displayText == "02:00" }
         await countdown.waitForLoad()
         #expect(countdown.displayText == "02:00")
-    }
-}
-
-extension ScriptedEventRepository {
-    /// 取得の呼び出しが `count` 回に達するまで待つ。並列に動くテストの負荷で遅れても先へ進まないよう、回数ではなく実時間で打ち切る。
-    func waitForRequests(_ count: Int) async {
-        await waitWhile { requests.count < count }
-    }
-
-    /// 返却を止められている取得が `count` 件になるまで待つ。打ち切りは `waitForRequests(_:)` と同じ。
-    func waitForPending(_ count: Int) async {
-        await waitWhile { pendingCount < count }
-    }
-
-    private func waitWhile(_ condition: () -> Bool) async {
-        let deadline = ContinuousClock.now + .seconds(10)
-        while condition(), ContinuousClock.now < deadline {
-            try? await Task.sleep(for: .milliseconds(1))
-        }
     }
 }

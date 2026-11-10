@@ -97,7 +97,7 @@ public final class MenuBarController: NSObject {
         if let text = countdown.displayText {
             button.image = nil
             button.imagePosition = .noImage
-            // 色を持たない属性付き文字列にせず、title と font で出す。文字色はメニューバーの外観に合わせてボタンが決める。
+            // 文字色は、メニューバーの外観に合わせてボタンが決める。
             button.font = NSFont.monospacedDigitSystemFont(ofSize: NSFont.menuBarFont(ofSize: 0).pointSize, weight: .regular)
             button.title = text
             button.setAccessibilityLabel(countdown.accessibilityLabel ?? MenuBarIcon.accessibilityLabel)

@@ -42,6 +42,10 @@ actor ScriptedEventRepository: CalendarEventRepository {
         base = InMemoryCalendarEventRepository(events: events, error: error)
     }
 
+    /// `waitForRequests(_:)` と `waitForPending(_:)` で待っている呼び出し。件数が届いたときに再開する。
+    private var requestWaiters: [(count: Int, continuation: CheckedContinuation<Void, Never>)] = []
+    private var pendingWaiters: [(count: Int, continuation: CheckedContinuation<Void, Never>)] = []
+
     func gate() { isGated = true }
 
     var pendingCount: Int { pending.count }
@@ -49,10 +53,36 @@ actor ScriptedEventRepository: CalendarEventRepository {
     func events(in interval: DateInterval, calendars: Set<UserCalendar.Identity>) async throws -> [CalendarEvent] {
         requests.append(interval)
         requestedCalendars.append(calendars)
+        requestWaiters = Self.resumingReached(requestWaiters, count: requests.count)
         if isGated {
-            return await withCheckedContinuation { pending.append($0) }
+            return await withCheckedContinuation {
+                pending.append($0)
+                pendingWaiters = Self.resumingReached(pendingWaiters, count: pending.count)
+            }
         }
         return try await base.events(in: interval, calendars: calendars)
+    }
+
+    /// 取得の呼び出しが `count` 回に達するまで待つ。時間でも回数でも打ち切らないので、並列に動くテストの負荷で遅れても先へ進まない。
+    func waitForRequests(_ count: Int) async {
+        guard requests.count < count else { return }
+        await withCheckedContinuation { requestWaiters.append((count, $0)) }
+    }
+
+    /// 返却を止めている取得が `count` 件になるまで待つ。打ち切らないのは `waitForRequests(_:)` と同じ。
+    func waitForPending(_ count: Int) async {
+        guard pending.count < count else { return }
+        await withCheckedContinuation { pendingWaiters.append((count, $0)) }
+    }
+
+    private static func resumingReached(
+        _ waiters: [(count: Int, continuation: CheckedContinuation<Void, Never>)], count: Int
+    ) -> [(count: Int, continuation: CheckedContinuation<Void, Never>)] {
+        waiters.filter { waiter in
+            guard waiter.count <= count else { return true }
+            waiter.continuation.resume()
+            return false
+        }
     }
 
     func resume(at index: Int, events: [CalendarEvent]) {
