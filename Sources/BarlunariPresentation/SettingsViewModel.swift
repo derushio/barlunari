@@ -242,11 +242,6 @@ public final class SettingsViewModel {
         countdownCalendarSettings.isIncluded(id)
     }
 
-    /// 含めないカレンダーの名前を、一覧の順に並べたもの。含めないカレンダーがなければ空。操作ツールの状態の行に使う。
-    public var countdownExcludedCalendarNames: [String] {
-        calendars.filter { !countdownCalendarSettings.isIncluded($0.id) }.map(\.calendar.name)
-    }
-
     /// 画面の反応を速くするため先に表示を変え、失敗したら元に戻す。保存できたら変更を通知し、メニューバーの残り時間とポップオーバーが読み直す。
     ///
     /// 予定ごとの選択は変えない。非表示のカレンダーも設定を変えられる（表示に戻したときに効く）が、画面では操作できない。

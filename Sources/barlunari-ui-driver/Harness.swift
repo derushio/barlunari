@@ -106,6 +106,7 @@ final class Harness {
         }
         let visibility = InMemoryCalendarVisibilityRepository()
         let countdownSettings = InMemoryCountdownTargetSettingsRepository()
+        let countdownCalendarSettings = InMemoryCountdownCalendarSettingsRepository()
         let displayModeStore = InMemoryDisplayModeStore()
         let showDeclinedEventsStore = InMemoryShowDeclinedEventsStore()
         self.showDeclinedEventsStore = showDeclinedEventsStore
@@ -138,7 +139,9 @@ final class Harness {
             saveDisplayMode: SaveDisplayModeUseCase(store: displayModeStore),
             listCalendars: listCalendars,
             setCalendarVisibility: setCalendarVisibility,
-            loadCountdownSettings: LoadCountdownTargetSettingsUseCase(repository: countdownSettings),
+            loadCountdownPolicy: LoadCountdownTargetPolicyUseCase(
+                settingsRepository: countdownSettings, calendarSettingsRepository: countdownCalendarSettings
+            ),
             setCountdownTarget: SetCountdownTargetUseCase(repository: countdownSettings),
             workspaceNotificationCenter: workspaceNotificationCenter
         )
@@ -149,6 +152,7 @@ final class Harness {
                 eventRepository: eventRepository,
                 visibilityRepository: visibility,
                 settingsRepository: countdownSettings,
+                calendarSettingsRepository: countdownCalendarSettings,
                 dateProvider: dateProvider
             ),
             dateProvider: dateProvider,
@@ -164,6 +168,8 @@ final class Harness {
             saveFirstWeekday: SaveFirstWeekdayUseCase(store: firstWeekdayStore),
             listCalendars: listCalendars,
             setCalendarVisibility: setCalendarVisibility,
+            loadCountdownCalendarSettings: LoadCountdownCalendarSettingsUseCase(repository: countdownCalendarSettings),
+            setCountdownCalendarIncluded: SetCountdownCalendarIncludedUseCase(repository: countdownCalendarSettings),
             requestCalendarAccess: requestCalendarAccess,
             openSystemSettings: openSystemSettings,
             changeNotifier: changeNotifier
@@ -399,6 +405,16 @@ final class Harness {
         return " 残り時間に含める=\(state)"
     }
 
+    /// 設定画面の「残り時間」タブで含めないカレンダー。`残り時間に含めないカレンダー=2件[Google/日本の祝日,仕事/仕事]`、なければ `0件[]`。
+    /// 設定画面を開いたときに読み込むので、開く前は `0件[]` である。
+    private var countdownExcludedCalendarsSummary: String {
+        let accountNames = Dictionary(uniqueKeysWithValues: settingsViewModel.accounts.map { ($0.id, $0.name) })
+        let names = settingsViewModel.calendars
+            .filter { !settingsViewModel.isIncludedInCountdown($0.id) }
+            .map { "\(accountNames[$0.calendar.accountID] ?? "?")/\($0.calendar.name)" }
+        return "残り時間に含めないカレンダー=\(names.count)件[\(names.joined(separator: ","))]"
+    }
+
     /// 操作の対象のウインドウと、設定の値。`辞退した予定を表示` の `保存` は、トグルで保存した値を呼ばれた順に並べたもの。
     private var settingsSummary: String {
         let saved = showDeclinedEventsStore.savedValues.map { $0 ? "on" : "off" }.joined(separator: ",")
@@ -406,7 +422,7 @@ final class Harness {
         let weekday = settingsViewModel.firstWeekday?.displayName ?? "システム"
         let savedWeekdays = firstWeekdayStore.savedValues.map { $0?.displayName ?? "システム" }.joined(separator: ",")
         let header = viewModel.weekdaySymbols.joined()
-        return "操作対象=\(settingsWindow == nil ? "ポップオーバー" : "設定") 辞退した予定を表示=\(shown)(保存=[\(saved)]) 週の始まり=\(weekday)(保存=[\(savedWeekdays)]) 曜日の見出し=\(header)"
+        return "操作対象=\(settingsWindow == nil ? "ポップオーバー" : "設定") 辞退した予定を表示=\(shown)(保存=[\(saved)]) 週の始まり=\(weekday)(保存=[\(savedWeekdays)]) 曜日の見出し=\(header) \(countdownExcludedCalendarsSummary)"
     }
 
     var stateSummary: String {
