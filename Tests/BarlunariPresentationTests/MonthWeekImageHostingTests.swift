@@ -67,7 +67,7 @@ import Testing
             differing += diffs.filter { $0 > 6 }.count
         }
         print("画面に描いた行と画像を貼った行(\(scheme.rawValue)): 倍率の差の最大 \(worst)、6 を超える成分 \(differing)")
-        // 表示月の外を薄める覆いは行の外（`MonthShadeStrip`）にあり、この行には含まれない。覆いが差を和らげていた分だけ、以前より上限を上げた。
+        // 表示月の外を薄める覆いは行の外（`MonthShadeStrip`）にあり、この行には含まれない。表示月の外のマスの差も覆いで和らがないまま比べる。
         #expect(worst <= 24)
     }
 }
