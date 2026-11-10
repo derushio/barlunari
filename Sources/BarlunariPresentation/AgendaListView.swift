@@ -105,6 +105,9 @@ struct AgendaRowView: View {
                             if let label = state.attendance.label {
                                 Text(label).font(.caption2.weight(.medium)).foregroundStyle(.secondary)
                             }
+                            if let symbol = state.countdownMark.symbolName {
+                                Image(systemName: symbol).font(.callout).symbolRenderingMode(.multicolor)
+                            }
                         }
                         Text(state.title).font(.callout).lineLimit(2)
                             .strikethrough(isDeclined)

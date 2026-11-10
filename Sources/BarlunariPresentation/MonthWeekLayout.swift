@@ -25,6 +25,7 @@ public struct MonthWeekLayout: Equatable, Sendable {
         public let color: CalendarColor?
         public let isPast: Bool
         public let attendance: ListedAttendance
+        public let countdownMark: CountdownMark
     }
 
     /// 表示するときに残した予定と、列ごとの隠れた件数。
@@ -47,6 +48,7 @@ public struct MonthWeekLayout: Equatable, Sendable {
         days: [CalendarDay],
         eventsByDay: [CalendarDay: [CalendarEvent]],
         color: (CalendarEvent) -> CalendarColor?,
+        countdownMark: (CalendarEvent) -> CountdownMark = { _ in .none },
         now: Date,
         calendar: Calendar,
         formatter: CalendarFormatter
@@ -112,7 +114,8 @@ public struct MonthWeekLayout: Equatable, Sendable {
                 title: pending.event.title.isEmpty ? "(タイトルなし)" : pending.event.title,
                 color: color(pending.event),
                 isPast: pending.isPast,
-                attendance: ListedAttendance(pending.event)
+                attendance: ListedAttendance(pending.event),
+                countdownMark: countdownMark(pending.event)
             )
         }
     }

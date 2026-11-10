@@ -343,10 +343,12 @@ public final class CalendarPopoverViewModel {
             if let events = eventsByDay[day] { weekEvents[day] = events }
         }
         let colors = calendarColors
+        let settings = countdownSettings
         return MonthWeekLayout(
             days: days,
             eventsByDay: weekEvents,
             color: { colors[$0.calendarIdentity] },
+            countdownMark: { CountdownMark($0, settings: settings) },
             now: dateProvider.now,
             calendar: dateProvider.calendar,
             formatter: formatter
@@ -418,7 +420,8 @@ public final class CalendarPopoverViewModel {
                 timeText: timeText(of: event.schedule, on: day),
                 calendarName: snapshot.calendar(for: event.calendarIdentity)?.name,
                 isPast: event.schedule.hasEnded(on: day, at: now, calendar: calendar),
-                attendance: ListedAttendance(event)
+                attendance: ListedAttendance(event),
+                countdownMark: CountdownMark(event, settings: countdownSettings)
             )
         }
 
@@ -801,10 +804,12 @@ public final class CalendarPopoverViewModel {
         else { return }
         let previous = countdownSettings
         countdownSettings.set(id, isTarget: included)
+        invalidateCountdownMarks()
         do {
             try await setCountdownTarget.execute(event: id, isTarget: included)
         } catch {
             countdownSettings = previous
+            invalidateCountdownMarks()
             return
         }
         // メニューバーの表示に伝える。予定は読み込み直さないので、自分の通知では読み込み直さない。
@@ -1059,6 +1064,12 @@ public final class CalendarPopoverViewModel {
         outer.start <= inner.start && inner.end <= outer.end
     }
 
+    /// 残り時間の記号が変わったので、月表示の予定の配置と描画の記憶を捨てる。予定は読み込み直さない。
+    private func invalidateCountdownMarks() {
+        dataRevision += 1
+        monthImageStore.removeAll()
+    }
+
     private func performLoad(generation: Int, range: DayRange) async {
         guard isCurrent(generation) else { return }
         phase = .loading
@@ -1161,7 +1172,8 @@ public final class CalendarPopoverViewModel {
             location: event.location.flatMap { $0.isEmpty ? nil : $0 },
             isPast: event.schedule.hasEnded(on: day, at: now, calendar: calendar),
             hasMeetingURL: event.meetingURL != nil,
-            attendance: ListedAttendance(event)
+            attendance: ListedAttendance(event),
+            countdownMark: CountdownMark(event, settings: countdownSettings)
         )
     }
 

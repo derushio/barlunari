@@ -74,8 +74,8 @@ struct MonthWeekRowView: View {
         case .timed(let timeText): "\(timeText) \(item.title)"
         case .bar: item.title
         }
-        guard let label = item.attendance.label else { return base }
-        return "\(base)、\(label)"
+        let labels = [item.attendance.label, item.countdownMark.label].compactMap { $0 }
+        return ([base] + labels).joined(separator: "、")
     }
 }
 
@@ -494,6 +494,9 @@ enum MonthWeekPainter {
         let roles = item.color.paletteRoles(context.environment.colorScheme)
         let lane = geometry.laneRect(lane: item.lane, columns: item.columns)
         let row = CGRect(x: lane.minX, y: lane.minY + 1, width: lane.width, height: barHeight)
+        // 残り時間の記号を付ける予定は、行の右端に記号の幅を空け、タイトルをその手前で切り詰める。
+        let markSymbol = item.countdownMark.symbolName
+        let markReserve: CGFloat = markSymbol == nil ? 0 : markSize + 3
         switch item.kind {
         case .bar(let continuesFromPrevious, let continuesToNext):
             // 前後の週へ続く側は、マスの端まで伸ばして角を付けない。
@@ -512,8 +515,9 @@ enum MonthWeekPainter {
                 context.fill(barPath, with: .color(roles.tintColor.opacity(CalendarPalette.pastTextOpacity)))
                 drawText(
                     item.title, style: .title, color: .pastPrimary, in: &context,
-                    from: bar.minX + 6, to: bar.maxX - 4, midY: bar.midY, strikethrough: true
+                    from: bar.minX + 6, to: bar.maxX - 4 - markReserve, midY: bar.midY, strikethrough: true
                 )
+                drawMark(markSymbol, color: Color.secondary, rightEdge: bar.maxX - 4, midY: bar.midY, in: &context)
             } else if item.isPast || item.attendance == .needsResponse {
                 // 過去の帯は塗らず、薄い背景と左端の線にして、標準の文字色で描く。未来の塗りの帯と形で区別する。
                 // 未回答の帯も塗らず、薄い背景を予定の色の点線で囲む。
@@ -533,13 +537,18 @@ enum MonthWeekPainter {
                 }
                 drawText(
                     item.title, style: .title, color: .primary, in: &context,
-                    from: bar.minX + 6, to: bar.maxX - 4, midY: bar.midY
+                    from: bar.minX + 6, to: bar.maxX - 4 - markReserve, midY: bar.midY
                 )
+                drawMark(markSymbol, color: Color.secondary, rightEdge: bar.maxX - 4, midY: bar.midY, in: &context)
             } else {
                 context.fill(barPath, with: .color(roles.fillColor))
                 drawText(
                     item.title, style: .title, color: roles.onFill == 0xFFFFFF ? .white : .ink, in: &context,
-                    from: bar.minX + 6, to: bar.maxX - 4, midY: bar.midY
+                    from: bar.minX + 6, to: bar.maxX - 4 - markReserve, midY: bar.midY
+                )
+                drawMark(
+                    markSymbol, color: (roles.onFill == 0xFFFFFF ? Color.white : Color(hex: 0x141414)).opacity(0.75),
+                    rightEdge: bar.maxX - 4, midY: bar.midY, in: &context
                 )
             }
         case .timed(let timeText):
@@ -557,7 +566,7 @@ enum MonthWeekPainter {
             let isDeclined = item.attendance == .declined
             let needsResponse = item.attendance == .needsResponse
             // 未回答は、点・時刻・タイトルの行全体を予定の色の点線で囲む。枠の分だけ右端を内側に寄せる。
-            let textMaxX = row.maxX - (needsResponse ? 4 : 2)
+            let textMaxX = row.maxX - (needsResponse ? 4 : 2) - markReserve
             if needsResponse {
                 context.stroke(
                     Path(roundedRect: row.insetBy(dx: 0.5, dy: 0.5), cornerRadius: barRadius), with: .color(roles.accentColor),
@@ -573,8 +582,24 @@ enum MonthWeekPainter {
                 item.title, style: .title, color: item.isPast || isDeclined ? .pastPrimary : .primary, in: &context,
                 from: timeX + timeWidth + 4, to: textMaxX, midY: row.midY, strikethrough: isDeclined
             )
+            drawMark(markSymbol, color: Color.secondary, rightEdge: textMaxX + markReserve, midY: row.midY, in: &context)
         }
     }
+
+    /// 残り時間の記号を、`rightEdge` に右端を合わせて縦中央に描く。`symbol` が `nil` なら何も描かない。
+    /// 記号を持つ予定は少ないので、記号の解決は記憶しない。
+    private static func drawMark(
+        _ symbol: String?, color: Color, rightEdge: CGFloat, midY: CGFloat, in context: inout GraphicsContext
+    ) {
+        guard let symbol else { return }
+        // 多色で描き、時計は文字の色、右下の印は「外した」を赤、「含めた」を青の塗りにする。形と色の両方で見分けられる。
+        var image = context.resolve(Image(systemName: symbol).symbolRenderingMode(.multicolor))
+        image.shading = .color(color)
+        let rect = CGRect(x: rightEdge - markSize, y: midY - markSize / 2, width: markSize, height: markSize)
+        context.draw(image, in: rect.fitting(aspectRatio: image.size))
+    }
+
+    private static let markSize: CGFloat = 14
 
     private static func drawMore(_ count: Int, column: Int, in context: inout GraphicsContext, geometry: MonthRowGeometry) {
         let lane = geometry.laneRect(lane: geometry.laneCapacity - 1, columns: column..<(column + 1))
@@ -666,5 +691,15 @@ enum MonthWeekPainter {
             cache[key] = fit
         }
         return fit
+    }
+}
+
+private extension CGRect {
+    /// 縦横比を保って `self` に収め、中央に置いた矩形。
+    func fitting(aspectRatio size: CGSize) -> CGRect {
+        guard size.width > 0, size.height > 0 else { return self }
+        let scale = min(width / size.width, height / size.height)
+        let fitted = CGSize(width: size.width * scale, height: size.height * scale)
+        return CGRect(x: midX - fitted.width / 2, y: midY - fitted.height / 2, width: fitted.width, height: fitted.height)
     }
 }
