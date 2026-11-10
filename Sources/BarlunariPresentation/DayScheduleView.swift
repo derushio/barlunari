@@ -1,4 +1,5 @@
 import BarlunariDomain
+import Synchronization
 import SwiftUI
 
 /// 月表示の日の欄。選択日の 1 日のスケジュールを出す。2 列のときは、予定の詳細と表示するカレンダーの一覧も、スケジュールと入れ替えて出す。
@@ -256,6 +257,9 @@ private struct AllDayItemRow: View {
                 if let label = item.attendance.label {
                     Text(label).font(.caption2.weight(.medium)).foregroundStyle(.secondary)
                 }
+                if let symbol = item.countdownMark.symbolName {
+                    Image(systemName: symbol).font(.caption2).foregroundStyle(.secondary)
+                }
             }
             .padding(.horizontal, 8)
             .frame(height: 22)
@@ -359,8 +363,9 @@ private struct DayTimelineCanvas: View {
         }
     }
 
-    /// ブロック 1 つ。選択中（`isSelected`）なら背景を濃くし、枠線を付ける。高さ 40pt 以上ならタイトル（2 行まで）の下に時刻、それより低ければ 1 行にタイトルと時刻を並べる。
-    /// 収まらない文字はブロックの端で切る。
+    /// ブロック 1 つ。選択中（`isSelected`）なら背景を濃くし、枠線を付ける。
+    /// タイトルと時刻の並べ方は、ブロックの幅と高さを測って `DayBlockTextPlan` が決める。字の途中では切らない。
+    /// 残り時間の記号があれば右端に置き、文字はその手前で切り詰める。
     private static func draw(_ block: DayScheduleBlock, isSelected: Bool, in context: inout GraphicsContext) {
         let frame = frame(of: block)
         let roles = block.item.color.paletteRoles(context.environment.colorScheme)
@@ -390,25 +395,97 @@ private struct DayTimelineCanvas: View {
                     style: StrokeStyle(lineWidth: 1, dash: CalendarPalette.needsResponseDash)
                 )
             }
-            let textRect = CGRect(x: frame.minX + 8, y: frame.minY + 1, width: max(0, frame.width - 13), height: max(0, frame.height - 2))
-            var time = Text(verbatim: block.item.timeText).font(.caption2.monospacedDigit()).foregroundStyle(Color.secondary)
-            if let label = attendance.label { time = time + Text(verbatim: "  \(label)").font(.caption2.weight(.medium)).foregroundStyle(Color.secondary) }
-            if frame.height >= 40 {
-                let title = layer.resolve(Text(verbatim: block.item.title).font(.callout.weight(.semibold)).strikethrough(isDeclined))
-                let lineHeight = layer.resolve(Text(verbatim: "あ").font(.callout.weight(.semibold))).measure(in: textRect.size).height
-                let titleSize = title.measure(in: CGSize(width: textRect.width, height: min(textRect.height, lineHeight * 2)))
-                layer.drawLayer { titleLayer in
-                    if isFaded { titleLayer.opacity = CalendarPalette.pastTextOpacity }
-                    titleLayer.clip(to: Path(CGRect(origin: textRect.origin, size: CGSize(width: textRect.width, height: titleSize.height))))
-                    titleLayer.draw(title, in: CGRect(origin: textRect.origin, size: CGSize(width: textRect.width, height: lineHeight * 2)))
-                }
-                layer.draw(layer.resolve(time), at: CGPoint(x: textRect.minX, y: textRect.minY + titleSize.height), anchor: .topLeading)
-            } else {
-                let titleColor = Color.primary.opacity(isFaded ? CalendarPalette.pastTextOpacity : 1)
-                let line = Text(verbatim: block.item.title).font(.caption.weight(.semibold)).foregroundStyle(titleColor).strikethrough(isDeclined) + Text(verbatim: "  ") + time
-                layer.draw(layer.resolve(line), at: textRect.origin, anchor: .topLeading)
+            let markSymbol = block.item.countdownMark.symbolName
+            let markReserve: CGFloat = markSymbol == nil ? 0 : markSize + 3
+            let textRect = CGRect(
+                x: frame.minX + 8, y: frame.minY + 1,
+                width: max(0, frame.width - 13 - markReserve), height: max(0, frame.height - 2)
+            )
+            let plan = textPlan(for: block.item, size: textRect.size, in: layer)
+            let titleColor = Color.primary.opacity(isFaded ? CalendarPalette.pastTextOpacity : 1)
+            func resolved(_ text: String, _ role: DayBlockTextPlan.Role) -> GraphicsContext.ResolvedText {
+                layer.resolve(Text(verbatim: text).font(font(of: role)).foregroundStyle(role == .time ? Color.secondary : titleColor)
+                    .strikethrough(isDeclined && role != .time))
             }
+            var markY = frame.midY
+            switch plan.mode {
+            case .stacked:
+                let title = resolved(plan.title, .stackedTitle)
+                let titleHeight = title.measure(in: CGSize(width: textRect.width, height: .greatestFiniteMagnitude)).height
+                layer.draw(title, in: CGRect(origin: textRect.origin, size: CGSize(width: textRect.width, height: titleHeight)))
+                if let time = plan.time {
+                    layer.draw(resolved(time, .time), at: CGPoint(x: textRect.minX, y: textRect.minY + titleHeight), anchor: .topLeading)
+                }
+                markY = textRect.minY + layer.resolve(Text(verbatim: "あ").font(font(of: .stackedTitle))).measure(in: textRect.size).height / 2
+            case .singleLine:
+                let title = resolved(plan.title, .lineTitle)
+                layer.draw(title, at: CGPoint(x: textRect.minX, y: frame.midY), anchor: .leading)
+                if let time = plan.time {
+                    let titleWidth = title.measure(in: CGSize(width: DayBlockTextPlan.unlimited, height: 100)).width
+                    layer.draw(
+                        resolved(time, .time), at: CGPoint(x: textRect.minX + titleWidth + DayBlockTextPlan.lineGap, y: frame.midY),
+                        anchor: .leading
+                    )
+                }
+            case .minimal:
+                layer.draw(resolved(plan.title, .tinyTitle(fontSize: plan.fontSize)), at: CGPoint(x: textRect.minX, y: frame.midY), anchor: .leading)
+            }
+            drawMark(markSymbol, rightEdge: frame.maxX - 5, midY: markY, maxSize: textRect.height, in: &layer)
         }
+    }
+
+    /// 残り時間の記号の 1 辺の大きさ。
+    private static let markSize: CGFloat = 12
+
+    /// 残り時間の記号を、`rightEdge` に右端を合わせて描く。`symbol` が `nil` なら何も描かない。
+    private static func drawMark(_ symbol: String?, rightEdge: CGFloat, midY: CGFloat, maxSize: CGFloat, in context: inout GraphicsContext) {
+        guard let symbol, maxSize >= 6 else { return }
+        let size = min(markSize, maxSize)
+        var image = context.resolve(Image(systemName: symbol).symbolRenderingMode(.monochrome))
+        image.shading = .color(.secondary)
+        let scale = min(size / max(image.size.width, 1), size / max(image.size.height, 1))
+        let fitted = CGSize(width: image.size.width * scale, height: image.size.height * scale)
+        context.draw(image, in: CGRect(x: rightEdge - fitted.width, y: midY - fitted.height / 2, width: fitted.width, height: fitted.height))
+    }
+
+    private static func font(of role: DayBlockTextPlan.Role) -> Font {
+        switch role {
+        case .stackedTitle: .callout.weight(.semibold)
+        case .time: .caption2.monospacedDigit()
+        case .lineTitle: .caption.weight(.semibold)
+        case .tinyTitle(let size): .system(size: size, weight: .semibold)
+        }
+    }
+
+    private struct PlanKey: Hashable {
+        let title: String
+        let timeText: String
+        let label: String?
+        /// 幅と高さを 0.5pt 単位に丸めた値。
+        let width: Int
+        let height: Int
+    }
+
+    /// 計画の記憶。文字の測定は重いので、同じタイトル、時刻、大きさのブロックは測り直さない。上限を超えたら捨てる。
+    private static let planCache = Mutex<[PlanKey: DayBlockTextPlan]>([:])
+    private static let planCacheLimit = 2_000
+
+    private static func textPlan(for item: DayScheduleItem, size: CGSize, in context: GraphicsContext) -> DayBlockTextPlan {
+        let key = PlanKey(
+            title: item.title, timeText: item.timeText, label: item.attendance.label,
+            width: Int((size.width * 2).rounded(.down)), height: Int((size.height * 2).rounded(.down))
+        )
+        if let plan = planCache.withLock({ $0[key] }) { return plan }
+        let plan = DayBlockTextPlan.make(
+            title: item.title, timeText: item.timeText, label: item.attendance.label, width: size.width, height: size.height
+        ) { text, role, width in
+            context.resolve(Text(verbatim: text).font(font(of: role))).measure(in: CGSize(width: width, height: .greatestFiniteMagnitude))
+        }
+        planCache.withLock { cache in
+            if cache.count >= planCacheLimit { cache.removeAll() }
+            cache[key] = plan
+        }
+        return plan
     }
 
     private static func drawNowLine(minute: Int, in context: inout GraphicsContext) {
