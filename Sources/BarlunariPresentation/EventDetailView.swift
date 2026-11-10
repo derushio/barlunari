@@ -129,13 +129,15 @@ struct EventDetailView: View {
     /// 残り時間の対象のチェックボックスの行。アイコンは出さず、四角をほかの行のアイコンの列（幅 `iconColumnWidth`）の中心に置き、
     /// タイトルをほかの行の文字と同じ x から始める。四角とタイトルは 1 つの `Toggle` で、タイトルを押しても切り替わる。
     private var countdownRow: some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: 4) {
             Toggle(isOn: Binding(get: { detail.includedInCountdown }, set: { actions.setIncludedInCountdown($0) })) {
                 Text("メニューバーの残り時間に含める")
                     .font(.callout)
                     .padding(.leading, Self.countdownTitleLeadingPadding)
             }
             .toggleStyle(.checkbox)
+            // チェックボックスの部品は文字 1 行より下に高い。その分を打ち消し、行の間隔をほかの行と同じにする。
+            .padding(.bottom, -Self.checkboxExtraHeight)
             if detail.isDeclined {
                 Text("辞退した予定は残り時間に含めません")
                     .font(.caption)
@@ -150,6 +152,8 @@ struct EventDetailView: View {
     private static let iconTextSpacing: CGFloat = 6
     /// チェックボックスの四角の右からタイトルまでの標準の間隔を補い、タイトルを文字の列に揃える。
     private static let countdownTitleLeadingPadding: CGFloat = 2
+    /// チェックボックスの部品の高さが、ほかの行の文字 1 行の高さを下に超える量。
+    private static let checkboxExtraHeight: CGFloat = 2.5
 
     /// 出欠の回答欄。現在の出欠のボタンは塗りの記号と濃い背景で出し、色が見えなくても区別できるようにする。
     private func rsvpRow(_ rsvp: EventRSVPState) -> some View {
