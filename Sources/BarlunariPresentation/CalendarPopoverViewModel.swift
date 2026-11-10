@@ -361,7 +361,8 @@ public final class CalendarPopoverViewModel {
         let days = timeline.days(inWeek: index)
         var weekEvents: [CalendarDay: [CalendarEvent]] = [:]
         for day in days where timeline.isSelectable(day) {
-            if let events = eventsByDay[day] { weekEvents[day] = events }
+            // 月のマス目には辞退した予定を出さない。他 N 件、クリックの判定、先に用意する画像は、ここで絞った予定から作られる。
+            if let events = eventsByDay[day] { weekEvents[day] = events.filter { $0.attendance != .declined } }
         }
         let colors = calendarColors
         let policy = countdownPolicy
