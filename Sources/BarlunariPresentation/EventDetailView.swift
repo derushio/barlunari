@@ -5,10 +5,12 @@ import BarlunariDomain
 struct EventDetailActions {
     var respond: (AttendanceResponse) -> Void = { _ in }
     var openInCalendar: () -> Void = {}
+    var setIncludedInCountdown: (Bool) -> Void = { _ in }
 
     @MainActor
     init(_ viewModel: CalendarPopoverViewModel) {
         respond = { response in Task { await viewModel.respond(response) } }
+        setIncludedInCountdown = { included in Task { await viewModel.setIncludedInCountdown(included) } }
         openInCalendar = { Task { await viewModel.openDetailInCalendarApp() } }
     }
 
@@ -83,6 +85,16 @@ struct EventDetailView: View {
             infoRow("clock") { Text(detail.dateText).textSelection(.enabled) }
             if let calendarText = detail.calendarText {
                 infoRow("calendar") { Text(calendarText).textSelection(.enabled) }
+            }
+            if let included = detail.includedInCountdown {
+                infoRow("timer") {
+                    // 標準のチェックボックスにする。操作ツールの合成したクリックは、チェックボックスの NSButton には効く。
+                    Toggle(
+                        "メニューバーの残り時間に含める",
+                        isOn: Binding(get: { included }, set: { actions.setIncludedInCountdown($0) })
+                    )
+                    .toggleStyle(.checkbox)
+                }
             }
             if let location = detail.location {
                 infoRow("mappin.and.ellipse") { Text(location).textSelection(.enabled) }

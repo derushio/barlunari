@@ -63,6 +63,7 @@ struct Fixture {
         let eventRepository = SnapshotEventRepository(events: sampleEvents, error: eventError)
         events = eventRepository
         let visibility = InMemoryCalendarVisibilityRepository()
+        let countdownExclusions = InMemoryCountdownExclusionRepository()
         let launchAtLogin = FakeLaunchAtLoginService(isEnabled: true)
         let requestAccess = RequestCalendarAccessUseCase(authorizer: authorizer)
         let openSystemSettings = OpenSystemSettingsUseCase(opener: FakeSystemSettingsOpener())
@@ -93,6 +94,8 @@ struct Fixture {
                 authorizer: authorizer, calendarRepository: calendarRepository, visibilityRepository: visibility
             ),
             setCalendarVisibility: SetCalendarVisibilityUseCase(visibilityRepository: visibility),
+            loadCountdownExclusions: LoadCountdownExclusionsUseCase(repository: countdownExclusions),
+            setCountdownExclusion: SetCountdownExclusionUseCase(repository: countdownExclusions, dateProvider: dateProvider),
             workspaceNotificationCenter: NotificationCenter()
         )
         settings = SettingsViewModel(
@@ -204,6 +207,10 @@ func runSnapshots(outputDirectory: URL) async throws {
     for (name, appearance) in [("menubar-label-light", NSAppearance.Name.aqua), ("menubar-label-dark", .darkAqua)] {
         try await render(MenuBarLabelView().padding(12), appearance: appearance, to: output(name))
     }
+    // 次の予定までの残り時間を出したメニューバーのラベル（等幅数字）。
+    for (name, appearance) in [("menubar-countdown-light", NSAppearance.Name.aqua), ("menubar-countdown-dark", .darkAqua)] {
+        try await render(MenuBarLabelView(countdownText: "01:25").padding(12), appearance: appearance, to: output(name))
+    }
 
     // カラーパレットの一覧（全色を役割ごとに並べる）。
     for (name, appearance) in [("palette-light", NSAppearance.Name.aqua), ("palette-dark", .darkAqua)] {
@@ -243,6 +250,18 @@ func runSnapshots(outputDirectory: URL) async throws {
         await fixture.popover.waitForLoad()
         try showDetail(titled: "夕食", in: fixture)
         try await render(popoverView(fixture), appearance: .aqua, to: output("popover-detail-minimal"))
+    }
+
+    // 残り時間の対象のチェックボックス。オン（既定）とオフ（除外した後）を、ライトとダークで描く。
+    for (isIncluded, scheme) in [(true, "on"), (false, "off")] {
+        for (suffix, appearance) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua)] {
+            let fixture = Fixture()
+            fixture.popover.reload()
+            await fixture.popover.waitForLoad()
+            try showDetail(titled: "デザインレビュー", in: fixture)
+            await fixture.popover.setIncludedInCountdown(isIncluded)
+            try await render(popoverView(fixture), appearance: appearance, to: output("popover-detail-countdown-\(scheme)-\(suffix)"))
+        }
     }
 
     // 出欠の回答欄。未回答の招待をライトとダークで、承諾した後と、保存に失敗した後（カレンダーで開くボタン付き）を描く。

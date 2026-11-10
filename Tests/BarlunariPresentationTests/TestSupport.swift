@@ -99,6 +99,9 @@ struct Harness {
     let dateProvider: MutableDateProvider
     let authorizer: FakeCalendarAccessAuthorizer
     let visibility: InMemoryCalendarVisibilityRepository
+    let countdownExclusions: InMemoryCountdownExclusionRepository
+    /// ポップオーバーと同じ通知を共有するメニューバーの残り時間。`start()` は呼んでいない。
+    let countdown: MenuBarCountdownViewModel
     let launchAtLogin: FakeLaunchAtLoginService
     let displayModeStore: InMemoryDisplayModeStore
     let showDeclinedEventsStore: InMemoryShowDeclinedEventsStore
@@ -133,6 +136,7 @@ struct Harness {
         var hidden = CalendarVisibility()
         hiddenCalendars.forEach { hidden.hide($0.id) }
         visibility = InMemoryCalendarVisibilityRepository(visibility: hidden)
+        countdownExclusions = InMemoryCountdownExclusionRepository()
         calendarRepository = CountingCalendarRepository(accounts: accounts, calendars: calendars)
         authorizer = FakeCalendarAccessAuthorizer(
             status: status, statusAfterRequest: statusAfterRequest, requestError: requestError
@@ -166,6 +170,24 @@ struct Harness {
                 authorizer: authorizer, calendarRepository: calendarRepository, visibilityRepository: visibility
             ),
             setCalendarVisibility: SetCalendarVisibilityUseCase(visibilityRepository: visibility),
+            loadCountdownExclusions: LoadCountdownExclusionsUseCase(repository: countdownExclusions),
+            setCountdownExclusion: SetCountdownExclusionUseCase(
+                repository: countdownExclusions, dateProvider: overridingDateProvider
+            ),
+            workspaceNotificationCenter: workspaceNotificationCenter,
+            notificationCenter: notificationCenter
+        )
+        countdown = MenuBarCountdownViewModel(
+            loadUpcomingEvents: LoadUpcomingEventsUseCase(
+                authorizer: authorizer,
+                calendarRepository: calendarRepository,
+                eventRepository: eventRepository,
+                visibilityRepository: visibility,
+                exclusionRepository: countdownExclusions,
+                dateProvider: overridingDateProvider
+            ),
+            dateProvider: overridingDateProvider,
+            changeNotifier: notifier,
             workspaceNotificationCenter: workspaceNotificationCenter,
             notificationCenter: notificationCenter
         )

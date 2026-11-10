@@ -9,6 +9,7 @@ import BarlunariPresentation
 final class AppContainer {
     let popoverViewModel: CalendarPopoverViewModel
     let settingsViewModel: SettingsViewModel
+    let countdownViewModel: MenuBarCountdownViewModel
 
     init() {
         // 設定の「週の始まり」を保存する。ポップオーバーと設定画面に同じ保存先を渡す。
@@ -20,6 +21,8 @@ final class AppContainer {
         let urlOpener = WorkspaceURLOpener()
         let systemSettingsOpener = WorkspaceSystemSettingsOpener()
         let visibilityRepository = UserDefaultsCalendarVisibilityRepository()
+        // 残り時間の対象から外した予定。ポップオーバーの詳細で切り替え、メニューバーの表示が読む。
+        let countdownExclusionRepository = UserDefaultsCountdownExclusionRepository()
         let displayModeStore = UserDefaultsDisplayModeStore()
         let showDeclinedEventsStore = UserDefaultsShowDeclinedEventsStore()
         let launchAtLoginService = SMAppServiceLaunchAtLoginService()
@@ -59,6 +62,24 @@ final class AppContainer {
             saveDisplayMode: SaveDisplayModeUseCase(store: displayModeStore),
             listCalendars: listCalendars,
             setCalendarVisibility: setCalendarVisibility,
+            loadCountdownExclusions: LoadCountdownExclusionsUseCase(repository: countdownExclusionRepository),
+            setCountdownExclusion: SetCountdownExclusionUseCase(
+                repository: countdownExclusionRepository, dateProvider: dateProvider
+            ),
+            workspaceNotificationCenter: NSWorkspace.shared.notificationCenter
+        )
+        // メニューバーの項目の残り時間。パネルを開かなくても予定を取得する。ポップオーバーと同じ `changeNotifier` を共有する。
+        countdownViewModel = MenuBarCountdownViewModel(
+            loadUpcomingEvents: LoadUpcomingEventsUseCase(
+                authorizer: calendarStore,
+                calendarRepository: calendarStore,
+                eventRepository: calendarStore,
+                visibilityRepository: visibilityRepository,
+                exclusionRepository: countdownExclusionRepository,
+                dateProvider: dateProvider
+            ),
+            dateProvider: dateProvider,
+            changeNotifier: changeNotifier,
             workspaceNotificationCenter: NSWorkspace.shared.notificationCenter
         )
         settingsViewModel = SettingsViewModel(

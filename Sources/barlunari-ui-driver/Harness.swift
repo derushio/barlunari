@@ -40,6 +40,10 @@ final class Harness {
     private let settingsViewModel: SettingsViewModel
     private let showDeclinedEventsStore: InMemoryShowDeclinedEventsStore
     private let firstWeekdayStore: InMemoryFirstWeekdayStore
+    /// ポップオーバーとメニューバーの残り時間が参照する、進められる時刻の提供元。
+    private let clock = AdvancingDateProvider()
+    /// メニューバーの項目の残り時間。ポップオーバーと同じ `DataChangeNotifier` と除外の保存先を共有する。表示は結果の 1 行に出す。
+    private let countdownViewModel: MenuBarCountdownViewModel
     /// `settings open` で作る、設定画面のオフスクリーンのウインドウ。開いている間だけ持つ。
     private var settingsWindow: NSWindow?
     /// click、hover、scroll、key、screenshot の対象のウインドウ。設定を開いている間は設定画面、そうでなければポップオーバー。
@@ -78,7 +82,7 @@ final class Harness {
         // アプリの AppContainer と同じく、保存した週の開始曜日で暦を置き換える DateProvider で包む。保存先はメモリ。
         let firstWeekdayStore = InMemoryFirstWeekdayStore()
         self.firstWeekdayStore = firstWeekdayStore
-        let dateProvider = FirstWeekdayOverridingDateProvider(base: FixedDateProvider(), store: firstWeekdayStore)
+        let dateProvider = FirstWeekdayOverridingDateProvider(base: clock, store: firstWeekdayStore)
         let authorizer = FakeCalendarAccessAuthorizer(status: .fullAccess)
         let calendarRepository = InMemoryCalendarRepository(
             accounts: dataSet == .colorful ? ColorfulSampleData.accounts : SampleData.accounts,
@@ -101,6 +105,7 @@ final class Harness {
             NotificationCenter.default.post(name: .calendarStoreDidChange, object: nil)
         }
         let visibility = InMemoryCalendarVisibilityRepository()
+        let countdownExclusions = InMemoryCountdownExclusionRepository()
         let displayModeStore = InMemoryDisplayModeStore()
         let showDeclinedEventsStore = InMemoryShowDeclinedEventsStore()
         self.showDeclinedEventsStore = showDeclinedEventsStore
@@ -133,6 +138,21 @@ final class Harness {
             saveDisplayMode: SaveDisplayModeUseCase(store: displayModeStore),
             listCalendars: listCalendars,
             setCalendarVisibility: setCalendarVisibility,
+            loadCountdownExclusions: LoadCountdownExclusionsUseCase(repository: countdownExclusions),
+            setCountdownExclusion: SetCountdownExclusionUseCase(repository: countdownExclusions, dateProvider: dateProvider),
+            workspaceNotificationCenter: workspaceNotificationCenter
+        )
+        countdownViewModel = MenuBarCountdownViewModel(
+            loadUpcomingEvents: LoadUpcomingEventsUseCase(
+                authorizer: authorizer,
+                calendarRepository: calendarRepository,
+                eventRepository: eventRepository,
+                visibilityRepository: visibility,
+                exclusionRepository: countdownExclusions,
+                dateProvider: dateProvider
+            ),
+            dateProvider: dateProvider,
+            changeNotifier: changeNotifier,
             workspaceNotificationCenter: workspaceNotificationCenter
         )
         settingsViewModel = SettingsViewModel(
@@ -170,7 +190,21 @@ final class Harness {
         showPanel()
         viewModel.reload()
         await viewModel.waitForLoad()
+        countdownViewModel.start()
+        await countdownViewModel.waitForLoad()
         await settle()
+    }
+
+    // MARK: 時刻
+
+    /// 現在時刻を `seconds` 秒進める。ポップオーバーとメニューバーの残り時間は同じ時刻の提供元を参照するので、
+    /// 進めたあとに、どちらも再計算させる。
+    func advanceClock(by seconds: TimeInterval) async {
+        clock.advance(by: seconds)
+        viewModel.systemCalendarDidChange()
+        countdownViewModel.recompute()
+        await viewModel.waitForLoad()
+        await countdownViewModel.waitForLoad()
     }
 
     // MARK: 設定
@@ -352,6 +386,19 @@ final class Harness {
         return " 出欠=\(detail.attendanceText ?? "なし")(回答欄なし)"
     }
 
+    /// メニューバーの表示。`メニューバー="02:00"(次の予定まで2時間)`。対象の予定がなければ `メニューバー=アイコン`。
+    private var menuBarSummary: String {
+        guard let text = countdownViewModel.displayText else { return "メニューバー=アイコン" }
+        return "メニューバー=\"\(text)\"(\(countdownViewModel.accessibilityLabel ?? "ラベルなし"))"
+    }
+
+    /// 開いている詳細の、残り時間の対象のチェックボックス。`残り時間に含める=on|off|なし`。詳細を開いていなければ空。
+    private var countdownCheckboxSummary: String {
+        guard let detail = viewModel.eventDetail else { return "" }
+        let state = detail.includedInCountdown.map { $0 ? "on" : "off" } ?? "なし"
+        return " 残り時間に含める=\(state)"
+    }
+
     /// 操作の対象のウインドウと、設定の値。`辞退した予定を表示` の `保存` は、トグルで保存した値を呼ばれた順に並べたもの。
     private var settingsSummary: String {
         let saved = showDeclinedEventsStore.savedValues.map { $0 ? "on" : "off" }.joined(separator: ",")
@@ -370,7 +417,7 @@ final class Harness {
         let settings = settingsOpener.openedDestinations.isEmpty ? "" : " システム設定=\(settingsOpener.openedDestinations)"
         let hiddenCount = viewModel.calendarFilterSections.flatMap(\.items).filter { !$0.isVisible }.count
         let filter = "\(viewModel.isCalendarFilterOpen ? "開" : "閉")(\(viewModel.calendarFilterPhase) 非表示=\(hiddenCount)件)"
-        return "\(settingsSummary) 設定を開いた=\(footerActions.openSettingsCount)回 終了=\(footerActions.quitCount)回 モード=\(viewModel.displayMode.rawValue) カレンダー一覧=\(filter) 選択日=\(viewModel.selectedDay) 表示月=\(viewModel.displayedMonth) 状態=\(viewModel.phase) 詳細=\(detail) 一覧=\(viewModel.agendaDayCount)日 選択日の件数=\(rows)件(終日\(schedule.allDay.count) 時刻付き\(schedule.blocks.count))\(escape)\(settings)\(rsvpSummary) 回答=\(responder.responses.count)件 回答失敗=\(isRSVPFailing ? "on" : "off") カレンダーで開いた=\(calendarAppOpener.openedEvents.count)件 取得=\(eventRepository.fetchCount)回 同期要求=\(sourceRefresher.refreshCount)回"
+        return "\(settingsSummary) 設定を開いた=\(footerActions.openSettingsCount)回 終了=\(footerActions.quitCount)回 モード=\(viewModel.displayMode.rawValue) カレンダー一覧=\(filter) 選択日=\(viewModel.selectedDay) 表示月=\(viewModel.displayedMonth) 状態=\(viewModel.phase) 詳細=\(detail) 一覧=\(viewModel.agendaDayCount)日 選択日の件数=\(rows)件(終日\(schedule.allDay.count) 時刻付き\(schedule.blocks.count))\(escape)\(settings)\(rsvpSummary)\(countdownCheckboxSummary) \(menuBarSummary) 回答=\(responder.responses.count)件 回答失敗=\(isRSVPFailing ? "on" : "off") カレンダーで開いた=\(calendarAppOpener.openedEvents.count)件 取得=\(eventRepository.fetchCount)回 同期要求=\(sourceRefresher.refreshCount)回"
     }
 
     // MARK: イベントの合成
