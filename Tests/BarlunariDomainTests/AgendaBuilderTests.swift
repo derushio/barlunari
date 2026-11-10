@@ -363,3 +363,56 @@ import Testing
         #expect(builder.colorsByDay(of: days, calendars: calendars)[oct24] == [red])
     }
 }
+
+@Suite struct AgendaBuilderCandidateEventsTests {
+    let builder = AgendaBuilder()
+    let accountA = TestSupport.accountID("a")
+    let accountB = TestSupport.accountID("b")
+    let work = TestSupport.calendarID("work")
+    let hidden = TestSupport.calendarID("hidden")
+    let start = TestSupport.date(2026, 10, 24, 14, 0)
+
+    func event(
+        _ id: String, account: AccountID, calendarID: CalendarID? = nil,
+        attendance: AttendanceStatus = .accepted, uid: String? = nil
+    ) -> CalendarEvent {
+        CalendarEvent(
+            accountID: account, id: TestSupport.eventID(id), calendarID: calendarID ?? work, title: id,
+            schedule: .timed(DateInterval(start: start, duration: 3600)), attendance: attendance, iCalendarUID: uid
+        )
+    }
+
+    func visible(_ accounts: [AccountID]) -> Set<UserCalendar.Identity> {
+        Set(accounts.map { UserCalendar.Identity(accountID: $0, calendarID: work) })
+    }
+
+    @Test func 非表示のカレンダーの予定を除く() {
+        let result = builder.candidateEvents(
+            from: [event("a", account: accountA), event("b", account: accountA, calendarID: hidden)],
+            visibleCalendars: visible([accountA]), accountOrder: [accountA], includesDeclined: true
+        )
+        #expect(result.map(\.title) == ["a"])
+    }
+
+    @Test func 重複を除きアカウントの並びで先の予定を残す() {
+        let result = builder.candidateEvents(
+            from: [event("b", account: accountB, uid: "u"), event("a", account: accountA, uid: "u")],
+            visibleCalendars: visible([accountA, accountB]), accountOrder: [accountA, accountB], includesDeclined: true
+        )
+        #expect(result.map(\.title) == ["a"])
+    }
+
+    @Test func 辞退は重複の除去のあとに除く() {
+        let events = [event("a", account: accountA, attendance: .declined, uid: "u"), event("b", account: accountB, uid: "u")]
+        let kept = builder.candidateEvents(
+            from: events, visibleCalendars: visible([accountA, accountB]),
+            accountOrder: [accountA, accountB], includesDeclined: false
+        )
+        #expect(kept.isEmpty)
+        let included = builder.candidateEvents(
+            from: events, visibleCalendars: visible([accountA, accountB]),
+            accountOrder: [accountA, accountB], includesDeclined: true
+        )
+        #expect(included.map(\.title) == ["a"])
+    }
+}

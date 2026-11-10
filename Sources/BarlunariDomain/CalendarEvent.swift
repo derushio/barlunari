@@ -8,6 +8,12 @@ public struct CalendarEvent: Sendable, Hashable, Identifiable {
         public let accountID: AccountID
         public let calendarID: CalendarID
         public let eventID: EventID
+
+        public init(accountID: AccountID, calendarID: CalendarID, eventID: EventID) {
+            self.accountID = accountID
+            self.calendarID = calendarID
+            self.eventID = eventID
+        }
     }
 
     /// 複数のアカウントが同じ予定を取得したとき、同じ予定とみなす組。`AgendaBuilder` が重複の除去に使う。
