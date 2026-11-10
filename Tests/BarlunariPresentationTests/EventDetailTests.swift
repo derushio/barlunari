@@ -417,31 +417,41 @@ import Testing
         return viewModel
     }
 
-    @Test func これから始まる予定はオンで出す() async throws {
-        let viewModel = try await openDetail(titled: "デザインレビュー", in: Harness())
-        #expect(viewModel.eventDetail?.includedInCountdown == true)
-    }
-
-    @Test func 開始済みの予定には出さない() async throws {
-        let viewModel = try await openDetail(titled: "朝会", in: Harness())
-        #expect(viewModel.eventDetail?.includedInCountdown == nil)
-    }
-
-    @Test func 辞退した予定には出さない() async throws {
-        let viewModel = try await openDetail(titled: "辞退した会議", in: Harness())
-        #expect(viewModel.eventDetail?.includedInCountdown == nil)
-    }
-
-    @Test func 終日予定には出さない() async throws {
-        let harness = Harness()
+    func openAllDayDetail(in harness: Harness) async throws -> CalendarPopoverViewModel {
         let viewModel = await harness.loadedPopover()
         viewModel.select(SampleData.day(2026, 10, 25))
         let row = try #require(viewModel.selectedSection.rows.first { $0.title == "引っ越し" })
         viewModel.showDetail(of: row)
-        #expect(viewModel.eventDetail?.includedInCountdown == nil)
+        return viewModel
     }
 
-    @Test func 二十四時間より先の予定にも出す() async throws {
+    @Test func これから始まる予定は既定でオン() async throws {
+        let viewModel = try await openDetail(titled: "デザインレビュー", in: Harness())
+        #expect(viewModel.eventDetail?.includedInCountdown == true)
+    }
+
+    @Test func 開始済みの予定にも設定があり既定でオン() async throws {
+        let viewModel = try await openDetail(titled: "朝会", in: Harness())
+        #expect(viewModel.eventDetail?.includedInCountdown == true)
+    }
+
+    @Test func 辞退した予定にも設定があり既定でオンで説明用の印を持つ() async throws {
+        let viewModel = try await openDetail(titled: "辞退した会議", in: Harness())
+        #expect(viewModel.eventDetail?.includedInCountdown == true)
+        #expect(viewModel.eventDetail?.isDeclined == true)
+    }
+
+    @Test func 辞退していない予定は辞退の印を持たない() async throws {
+        let viewModel = try await openDetail(titled: "デザインレビュー", in: Harness())
+        #expect(viewModel.eventDetail?.isDeclined == false)
+    }
+
+    @Test func 終日予定は既定でオフ() async throws {
+        let viewModel = try await openAllDayDetail(in: Harness())
+        #expect(viewModel.eventDetail?.includedInCountdown == false)
+    }
+
+    @Test func 二十四時間より先の予定も既定でオン() async throws {
         let harness = Harness()
         let viewModel = await harness.loadedPopover()
         viewModel.select(SampleData.day(2026, 10, 28))
@@ -450,7 +460,7 @@ import Testing
         #expect(viewModel.eventDetail?.includedInCountdown == true)
     }
 
-    @Test func 外すと除外して保存し保存先に開始日時とともに残る() async throws {
+    @Test func 外すと対象外として保存する() async throws {
         let harness = Harness()
         let viewModel = try await openDetail(titled: "デザインレビュー", in: harness)
         let id = try #require(viewModel.detailEventID)
@@ -458,19 +468,62 @@ import Testing
         await viewModel.setIncludedInCountdown(false)
 
         #expect(viewModel.eventDetail?.includedInCountdown == false)
-        let saved = await harness.countdownExclusions.load()
-        #expect(saved.starts[id] == SampleData.date(2026, 10, 24, 14, 0))
+        #expect(await harness.countdownSettings.load().choices[id] == false)
     }
 
-    @Test func 戻すと対象に戻り保存からも消える() async throws {
+    @Test func 戻すと対象にした設定として保存する() async throws {
         let harness = Harness()
         let viewModel = try await openDetail(titled: "デザインレビュー", in: harness)
+        let id = try #require(viewModel.detailEventID)
 
         await viewModel.setIncludedInCountdown(false)
         await viewModel.setIncludedInCountdown(true)
 
         #expect(viewModel.eventDetail?.includedInCountdown == true)
-        #expect(await harness.countdownExclusions.load() == CountdownExclusions())
+        #expect(await harness.countdownSettings.load().choices[id] == true)
+    }
+
+    @Test func 終日予定を対象にして保存し読み直しても残る() async throws {
+        let harness = Harness()
+        let viewModel = try await openAllDayDetail(in: harness)
+        let id = try #require(viewModel.detailEventID)
+
+        await viewModel.setIncludedInCountdown(true)
+        #expect(viewModel.eventDetail?.includedInCountdown == true)
+        #expect(await harness.countdownSettings.load().choices[id] == true)
+
+        viewModel.reload()
+        await viewModel.waitForLoad()
+        #expect(viewModel.eventDetail?.includedInCountdown == true)
+    }
+
+    @Test func 辞退した予定の設定も切り替えて保存できる() async throws {
+        let harness = Harness()
+        let viewModel = try await openDetail(titled: "辞退した会議", in: harness)
+        let id = try #require(viewModel.detailEventID)
+
+        await viewModel.setIncludedInCountdown(false)
+        #expect(viewModel.eventDetail?.includedInCountdown == false)
+        #expect(await harness.countdownSettings.load().choices[id] == false)
+
+        await viewModel.setIncludedInCountdown(true)
+        #expect(viewModel.eventDetail?.includedInCountdown == true)
+        #expect(await harness.countdownSettings.load().choices[id] == true)
+    }
+
+    @Test func 開始済みの予定を切り替えても元に戻らない() async throws {
+        let harness = Harness()
+        let viewModel = try await openDetail(titled: "朝会", in: harness)
+        let id = try #require(viewModel.detailEventID)
+
+        await viewModel.setIncludedInCountdown(false)
+        #expect(viewModel.eventDetail?.includedInCountdown == false)
+
+        // 読み直しても、開始を過ぎた予定の設定は消えない。
+        viewModel.reload()
+        await viewModel.waitForLoad()
+        #expect(viewModel.eventDetail?.includedInCountdown == false)
+        #expect(await harness.countdownSettings.load().choices[id] == false)
     }
 
     @Test func すでにその状態なら保存しない() async throws {
@@ -479,7 +532,7 @@ import Testing
 
         await viewModel.setIncludedInCountdown(true)
 
-        #expect(await harness.countdownExclusions.updateCount == 0)
+        #expect(await harness.countdownSettings.updateCount == 0)
         #expect(harness.notifier.revision == 0)
     }
 
@@ -500,16 +553,16 @@ import Testing
         struct SaveFailure: Error {}
         let harness = Harness()
         let viewModel = try await openDetail(titled: "デザインレビュー", in: harness)
-        await harness.countdownExclusions.setFailure(SaveFailure())
+        await harness.countdownSettings.setFailure(SaveFailure())
 
         await viewModel.setIncludedInCountdown(false)
 
         #expect(viewModel.eventDetail?.includedInCountdown == true)
         #expect(harness.notifier.revision == 0)
-        #expect(await harness.countdownExclusions.load() == CountdownExclusions())
+        #expect(await harness.countdownSettings.load() == CountdownTargetSettings())
     }
 
-    @Test func 読み直しても除外は残る() async throws {
+    @Test func 読み直しても対象外は残る() async throws {
         let harness = Harness()
         let viewModel = try await openDetail(titled: "デザインレビュー", in: harness)
         await viewModel.setIncludedInCountdown(false)
@@ -524,6 +577,6 @@ import Testing
         let harness = Harness()
         let viewModel = await harness.loadedPopover()
         await viewModel.setIncludedInCountdown(false)
-        #expect(await harness.countdownExclusions.updateCount == 0)
+        #expect(await harness.countdownSettings.updateCount == 0)
     }
 }

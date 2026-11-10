@@ -63,7 +63,7 @@ struct Fixture {
         let eventRepository = SnapshotEventRepository(events: sampleEvents, error: eventError)
         events = eventRepository
         let visibility = InMemoryCalendarVisibilityRepository()
-        let countdownExclusions = InMemoryCountdownExclusionRepository()
+        let countdownSettings = InMemoryCountdownTargetSettingsRepository()
         let launchAtLogin = FakeLaunchAtLoginService(isEnabled: true)
         let requestAccess = RequestCalendarAccessUseCase(authorizer: authorizer)
         let openSystemSettings = OpenSystemSettingsUseCase(opener: FakeSystemSettingsOpener())
@@ -94,8 +94,8 @@ struct Fixture {
                 authorizer: authorizer, calendarRepository: calendarRepository, visibilityRepository: visibility
             ),
             setCalendarVisibility: SetCalendarVisibilityUseCase(visibilityRepository: visibility),
-            loadCountdownExclusions: LoadCountdownExclusionsUseCase(repository: countdownExclusions),
-            setCountdownExclusion: SetCountdownExclusionUseCase(repository: countdownExclusions, dateProvider: dateProvider),
+            loadCountdownSettings: LoadCountdownTargetSettingsUseCase(repository: countdownSettings),
+            setCountdownTarget: SetCountdownTargetUseCase(repository: countdownSettings),
             workspaceNotificationCenter: NotificationCenter()
         )
         settings = SettingsViewModel(
@@ -261,6 +261,20 @@ func runSnapshots(outputDirectory: URL) async throws {
             try showDetail(titled: "デザインレビュー", in: fixture)
             await fixture.popover.setIncludedInCountdown(isIncluded)
             try await render(popoverView(fixture), appearance: appearance, to: output("popover-detail-countdown-\(scheme)-\(suffix)"))
+        }
+    }
+
+    // 終日の予定の詳細（既定でチェックがオフ）と、辞退した予定の詳細（チェックがオンで、残り時間に含めない説明が出る）。
+    for (title, name, showDeclined) in [("引っ越し", "popover-detail-countdown-allday", false), ("辞退した会議", "popover-detail-countdown-declined", true)] {
+        guard let id = SampleData.events.first(where: { $0.title == title })?.id else {
+            throw SnapshotError.renderFailed("サンプルに「\(title)」がない")
+        }
+        for (suffix, appearance) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua)] {
+            let fixture = Fixture(showDeclinedEvents: showDeclined)
+            fixture.popover.reload()
+            await fixture.popover.waitForLoad()
+            fixture.popover.showDetail(of: id)
+            try await render(popoverView(fixture), appearance: appearance, to: output("\(name)-\(suffix)"))
         }
     }
 

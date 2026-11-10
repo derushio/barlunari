@@ -21,8 +21,8 @@ final class AppContainer {
         let urlOpener = WorkspaceURLOpener()
         let systemSettingsOpener = WorkspaceSystemSettingsOpener()
         let visibilityRepository = UserDefaultsCalendarVisibilityRepository()
-        // 残り時間の対象から外した予定。ポップオーバーの詳細で切り替え、メニューバーの表示が読む。
-        let countdownExclusionRepository = UserDefaultsCountdownExclusionRepository()
+        // 残り時間の対象にするかの設定。ポップオーバーの詳細で切り替え、メニューバーの表示が読む。
+        let countdownSettingsRepository = UserDefaultsCountdownTargetSettingsRepository()
         let displayModeStore = UserDefaultsDisplayModeStore()
         let showDeclinedEventsStore = UserDefaultsShowDeclinedEventsStore()
         let launchAtLoginService = SMAppServiceLaunchAtLoginService()
@@ -62,10 +62,8 @@ final class AppContainer {
             saveDisplayMode: SaveDisplayModeUseCase(store: displayModeStore),
             listCalendars: listCalendars,
             setCalendarVisibility: setCalendarVisibility,
-            loadCountdownExclusions: LoadCountdownExclusionsUseCase(repository: countdownExclusionRepository),
-            setCountdownExclusion: SetCountdownExclusionUseCase(
-                repository: countdownExclusionRepository, dateProvider: dateProvider
-            ),
+            loadCountdownSettings: LoadCountdownTargetSettingsUseCase(repository: countdownSettingsRepository),
+            setCountdownTarget: SetCountdownTargetUseCase(repository: countdownSettingsRepository),
             workspaceNotificationCenter: NSWorkspace.shared.notificationCenter
         )
         // メニューバーの項目の残り時間。パネルを開かなくても予定を取得する。ポップオーバーと同じ `changeNotifier` を共有する。
@@ -75,7 +73,7 @@ final class AppContainer {
                 calendarRepository: calendarStore,
                 eventRepository: calendarStore,
                 visibilityRepository: visibilityRepository,
-                exclusionRepository: countdownExclusionRepository,
+                settingsRepository: countdownSettingsRepository,
                 dateProvider: dateProvider
             ),
             dateProvider: dateProvider,

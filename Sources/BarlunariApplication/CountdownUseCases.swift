@@ -9,7 +9,7 @@ public struct LoadUpcomingEventsUseCase: Sendable {
     private let calendarRepository: any CalendarRepository
     private let eventRepository: any CalendarEventRepository
     private let visibilityRepository: any CalendarVisibilityRepository
-    private let exclusionRepository: any CountdownExclusionRepository
+    private let settingsRepository: any CountdownTargetSettingsRepository
     private let dateProvider: any DateProvider
     private let agendaBuilder: AgendaBuilder
 
@@ -18,7 +18,7 @@ public struct LoadUpcomingEventsUseCase: Sendable {
         calendarRepository: any CalendarRepository,
         eventRepository: any CalendarEventRepository,
         visibilityRepository: any CalendarVisibilityRepository,
-        exclusionRepository: any CountdownExclusionRepository,
+        settingsRepository: any CountdownTargetSettingsRepository,
         dateProvider: any DateProvider,
         agendaBuilder: AgendaBuilder = AgendaBuilder()
     ) {
@@ -26,12 +26,12 @@ public struct LoadUpcomingEventsUseCase: Sendable {
         self.calendarRepository = calendarRepository
         self.eventRepository = eventRepository
         self.visibilityRepository = visibilityRepository
-        self.exclusionRepository = exclusionRepository
+        self.settingsRepository = settingsRepository
         self.dateProvider = dateProvider
         self.agendaBuilder = agendaBuilder
     }
 
-    /// 現在から `window` の範囲に重なる、表示中のカレンダーの予定を返す。辞退した予定は、設定にかかわらず除く。
+    /// 現在から `window` の範囲に重なる、表示中のカレンダーの予定を返す。辞退した予定も含む（詳細のチェックボックスの設定は辞退した予定にもある。数えるかどうかは `NextEventCountdown` が決める）。
     ///
     /// - Throws: 完全アクセスでなければ `.notDetermined` か `.denied`、カレンダーが 1 つもなければ `.noCalendars`。
     ///   予定の取得の失敗は、そのまま投げる。
@@ -54,49 +54,42 @@ public struct LoadUpcomingEventsUseCase: Sendable {
                 from: events,
                 visibleCalendars: visibleIdentities,
                 accountOrder: accounts.map(\.id),
-                includesDeclined: false
+                includesDeclined: true
             ),
-            exclusions: await exclusionRepository.load(),
-            rangeEnd: interval.end
+            settings: await settingsRepository.load(),
+            rangeEnd: interval.end,
+            calendar: dateProvider.calendar
         )
     }
 }
 
-public struct LoadCountdownExclusionsUseCase: Sendable {
-    private let repository: any CountdownExclusionRepository
+public struct LoadCountdownTargetSettingsUseCase: Sendable {
+    private let repository: any CountdownTargetSettingsRepository
 
-    public init(repository: any CountdownExclusionRepository) {
+    public init(repository: any CountdownTargetSettingsRepository) {
         self.repository = repository
     }
 
-    public func execute() async -> CountdownExclusions {
+    public func execute() async -> CountdownTargetSettings {
         await repository.load()
     }
 }
 
-public struct SetCountdownExclusionUseCase: Sendable {
-    private let repository: any CountdownExclusionRepository
-    private let dateProvider: any DateProvider
+public struct SetCountdownTargetUseCase: Sendable {
+    private let repository: any CountdownTargetSettingsRepository
 
-    public init(repository: any CountdownExclusionRepository, dateProvider: any DateProvider) {
+    public init(repository: any CountdownTargetSettingsRepository) {
         self.repository = repository
-        self.dateProvider = dateProvider
     }
 
-    /// 予定を残り時間の対象から外す、または戻す。`start` は予定の開始日時である。
+    /// 予定を残り時間の対象にするか、対象外にするかを保存する。
     ///
-    /// 保存するとき、開始日時が現在時刻より前の項目を消して、保存が増え続けないようにする。
+    /// 設定は回ごとの予定の ID に結び付けて持ち、時間が経っても消さない。
     ///
     /// - Throws: 保存に失敗したとき。
-    public func execute(event: CalendarEvent.Identity, start: Date, isExcluded: Bool) async throws {
-        let now = dateProvider.now
-        try await repository.update { exclusions in
-            if isExcluded {
-                exclusions.exclude(event, start: start)
-            } else {
-                exclusions.include(event)
-            }
-            exclusions.removeEntries(startingBefore: now)
+    public func execute(event: CalendarEvent.Identity, isTarget: Bool) async throws {
+        try await repository.update { settings in
+            settings.set(event, isTarget: isTarget)
         }
     }
 }

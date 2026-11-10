@@ -15,8 +15,10 @@ public struct EventDetailState: Equatable, Sendable {
     public let detailURL: URL?
     /// 自分の出欠。出欠の概念がない予定では `nil`。
     public let attendanceText: String?
-    /// メニューバーの残り時間に含めるか。対象になり得ない予定（終日、開始済み、辞退）では `nil` で、View はチェックボックスを出さない。
-    public let includedInCountdown: Bool?
+    /// メニューバーの残り時間に含めるか。利用者が選んだ値、なければ既定の値（時刻付きは含める、終日は含めない）。参加状況に左右されない。
+    public let includedInCountdown: Bool
+    /// 自分が辞退した予定か。辞退した予定は、チェックボックスがオンでも残り時間に数えないので、View が説明を出す。
+    public let isDeclined: Bool
     /// 出欠を回答できる予定の回答欄。回答できない予定は `nil` で、View は `attendanceText` の行を出す。
     public let rsvp: EventRSVPState?
     public let participants: [ParticipantRowState]

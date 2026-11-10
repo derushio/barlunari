@@ -86,14 +86,19 @@ struct EventDetailView: View {
             if let calendarText = detail.calendarText {
                 infoRow("calendar") { Text(calendarText).textSelection(.enabled) }
             }
-            if let included = detail.includedInCountdown {
-                infoRow("timer") {
+            infoRow("timer") {
+                VStack(alignment: .leading, spacing: 2) {
                     // 標準のチェックボックスにする。操作ツールの合成したクリックは、チェックボックスの NSButton には効く。
                     Toggle(
                         "メニューバーの残り時間に含める",
-                        isOn: Binding(get: { included }, set: { actions.setIncludedInCountdown($0) })
+                        isOn: Binding(get: { detail.includedInCountdown }, set: { actions.setIncludedInCountdown($0) })
                     )
                     .toggleStyle(.checkbox)
+                    if detail.isDeclined {
+                        Text("辞退した予定は残り時間に含めません")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                 }
             }
             if let location = detail.location {
