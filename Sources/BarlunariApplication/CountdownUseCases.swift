@@ -86,9 +86,11 @@ public struct SetCountdownExclusionUseCase: Sendable {
     /// 予定を残り時間の対象から外す、または戻す。`start` は予定の開始日時である。
     ///
     /// 保存するとき、開始日時が現在時刻より前の項目を消して、保存が増え続けないようにする。
-    public func execute(event: CalendarEvent.Identity, start: Date, isExcluded: Bool) async {
+    ///
+    /// - Throws: 保存に失敗したとき。
+    public func execute(event: CalendarEvent.Identity, start: Date, isExcluded: Bool) async throws {
         let now = dateProvider.now
-        await repository.update { exclusions in
+        try await repository.update { exclusions in
             if isExcluded {
                 exclusions.exclude(event, start: start)
             } else {

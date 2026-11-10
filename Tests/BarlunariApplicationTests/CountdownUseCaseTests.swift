@@ -96,27 +96,37 @@ import Testing
         )
     }
 
-    @Test func 除外して戻せる() async {
+    @Test func 除外して戻せる() async throws {
         let repository = InMemoryCountdownExclusionRepository()
         let useCase = SetCountdownExclusionUseCase(repository: repository, dateProvider: FixedDateProvider())
         let start = now.addingTimeInterval(3600)
-        await useCase.execute(event: identity("a"), start: start, isExcluded: true)
+        try await useCase.execute(event: identity("a"), start: start, isExcluded: true)
         #expect(await repository.load().isExcluded(identity("a")))
-        await useCase.execute(event: identity("a"), start: start, isExcluded: false)
+        try await useCase.execute(event: identity("a"), start: start, isExcluded: false)
         #expect(await !repository.load().isExcluded(identity("a")))
     }
 
-    @Test func 保存するとき開始が現在より前の項目を消す() async {
+    @Test func 保存するとき開始が現在より前の項目を消す() async throws {
         var initial = CountdownExclusions()
         initial.exclude(identity("past"), start: now.addingTimeInterval(-1))
         initial.exclude(identity("future"), start: now.addingTimeInterval(60))
         let repository = InMemoryCountdownExclusionRepository(exclusions: initial)
         let useCase = SetCountdownExclusionUseCase(repository: repository, dateProvider: FixedDateProvider())
-        await useCase.execute(event: identity("new"), start: now.addingTimeInterval(3600), isExcluded: true)
+        try await useCase.execute(event: identity("new"), start: now.addingTimeInterval(3600), isExcluded: true)
         let saved = await repository.load()
         #expect(!saved.isExcluded(identity("past")))
         #expect(saved.isExcluded(identity("future")))
         #expect(saved.isExcluded(identity("new")))
+    }
+
+    @Test func 保存に失敗したら投げて変更を保存しない() async {
+        struct SaveFailure: Error {}
+        let repository = InMemoryCountdownExclusionRepository(error: SaveFailure())
+        let useCase = SetCountdownExclusionUseCase(repository: repository, dateProvider: FixedDateProvider())
+        await #expect(throws: SaveFailure.self) {
+            try await useCase.execute(event: identity("a"), start: now.addingTimeInterval(3600), isExcluded: true)
+        }
+        #expect(await repository.load() == CountdownExclusions())
     }
 
     @Test func 読み込みは保存した集合を返す() async {
