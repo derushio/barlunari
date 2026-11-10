@@ -9,6 +9,19 @@ private enum WeekScrollTuning {
     static let retryInterval: Duration = .milliseconds(400)
     /// 見えている週の前後に、余分に描いておく週の数。速いスクロールで、描く前の行が見えないようにする。
     static let overscanWeeks = 2
+    /// 行を使い回す枠の数。見えている 6 週と、一部だけ見える 1 週と、前後の余分な週の数。
+    static let slotCount = WeekTimeline.visibleWeekCount + 1 + 2 * overscanWeeks
+}
+
+/// 子の行の週の番号。`WeekRowsLayout` が位置を決めるのに使う。
+private struct WeekRowIndexKey: LayoutValueKey {
+    static let defaultValue = 0
+}
+
+/// 行を使い回す枠と、そこに入れる週。
+private struct WeekSlot: Identifiable {
+    let week: Int
+    let id: Int
 }
 
 /// 週の行が連続して流れる縦のスクロール。コンパクト表示のマス目と月表示のマス目が共有する。
@@ -72,17 +85,25 @@ struct WeekScrollView<Row: View>: View {
     }
 
     /// 描く週の範囲。見えている 6 週と、一部だけ見える 1 週と、その前後の `overscanWeeks` 週。
+    /// 週の数が足りる限り、端でも長さを `WeekScrollTuning.slotCount` に保つ（行を使い回す枠の数と同じにするため）。
     private var renderedWeeks: Range<Int> {
-        let lower = max(0, firstVisibleWeek - WeekScrollTuning.overscanWeeks)
-        let upper = min(viewModel.weekCount, firstVisibleWeek + WeekTimeline.visibleWeekCount + 1 + WeekScrollTuning.overscanWeeks)
-        return lower..<max(lower, upper)
+        let count = min(viewModel.weekCount, WeekScrollTuning.slotCount)
+        let lower = min(max(0, firstVisibleWeek - WeekScrollTuning.overscanWeeks), viewModel.weekCount - count)
+        return lower..<(lower + count)
+    }
+
+    /// 描く週の行。週の番号を枠の数で割った余りを ID にして、範囲がずれたとき、外れた週の枠に入ってきた週を入れる。
+    /// 枠の並びは常に ID の順にして、範囲がずれても子の並びは変わらない（位置は `WeekRowsLayout` が週の番号から決める）。
+    /// 行の View を作り直さず、週の番号だけを差し替えるので、新しい行を作るフレームの命令数が減る。
+    private var renderedRows: [WeekSlot] {
+        renderedWeeks.map { WeekSlot(week: $0, id: $0 % WeekScrollTuning.slotCount) }.sorted { $0.id < $1.id }
     }
 
     var body: some View {
         ScrollView {
-            WeekRowsLayout(rowHeight: rowHeight, firstWeek: renderedWeeks.lowerBound, weekCount: viewModel.weekCount) {
-                ForEach(renderedWeeks, id: \.self) { index in
-                    row(index)
+            WeekRowsLayout(rowHeight: rowHeight, weekCount: viewModel.weekCount) {
+                ForEach(renderedRows) { slot in
+                    row(slot.week).layoutValue(key: WeekRowIndexKey.self, value: slot.week)
                 }
             }
         }
@@ -198,8 +219,6 @@ struct WeekScrollView<Row: View>: View {
 /// フレームに間に合わなくなるので、行の高さが固定であることを使って測らずに置く。
 struct WeekRowsLayout: Layout {
     let rowHeight: CGFloat
-    /// 最初の子の週の番号。子は週の番号の順に並んでいる。
-    let firstWeek: Int
     let weekCount: Int
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
@@ -208,8 +227,8 @@ struct WeekRowsLayout: Layout {
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
         let rowProposal = ProposedViewSize(width: bounds.width, height: rowHeight)
-        for (offset, subview) in subviews.enumerated() {
-            let y = bounds.minY + CGFloat(firstWeek + offset) * rowHeight
+        for subview in subviews {
+            let y = bounds.minY + CGFloat(subview[WeekRowIndexKey.self]) * rowHeight
             subview.place(at: CGPoint(x: bounds.minX, y: y), anchor: .topLeading, proposal: rowProposal)
         }
     }
