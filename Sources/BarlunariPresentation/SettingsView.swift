@@ -139,7 +139,7 @@ private struct CountdownSettingsTab: View {
             .disabled(!item.isVisible)
             if !item.isVisible {
                 Spacer()
-                Text("非表示のカレンダーです")
+                Text("非表示のため含めません")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
