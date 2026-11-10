@@ -105,7 +105,7 @@ final class Harness {
             NotificationCenter.default.post(name: .calendarStoreDidChange, object: nil)
         }
         let visibility = InMemoryCalendarVisibilityRepository()
-        let countdownExclusions = InMemoryCountdownExclusionRepository()
+        let countdownSettings = InMemoryCountdownTargetSettingsRepository()
         let displayModeStore = InMemoryDisplayModeStore()
         let showDeclinedEventsStore = InMemoryShowDeclinedEventsStore()
         self.showDeclinedEventsStore = showDeclinedEventsStore
@@ -138,8 +138,8 @@ final class Harness {
             saveDisplayMode: SaveDisplayModeUseCase(store: displayModeStore),
             listCalendars: listCalendars,
             setCalendarVisibility: setCalendarVisibility,
-            loadCountdownExclusions: LoadCountdownExclusionsUseCase(repository: countdownExclusions),
-            setCountdownExclusion: SetCountdownExclusionUseCase(repository: countdownExclusions, dateProvider: dateProvider),
+            loadCountdownSettings: LoadCountdownTargetSettingsUseCase(repository: countdownSettings),
+            setCountdownTarget: SetCountdownTargetUseCase(repository: countdownSettings),
             workspaceNotificationCenter: workspaceNotificationCenter
         )
         countdownViewModel = MenuBarCountdownViewModel(
@@ -148,7 +148,7 @@ final class Harness {
                 calendarRepository: calendarRepository,
                 eventRepository: eventRepository,
                 visibilityRepository: visibility,
-                exclusionRepository: countdownExclusions,
+                settingsRepository: countdownSettings,
                 dateProvider: dateProvider
             ),
             dateProvider: dateProvider,
@@ -392,10 +392,10 @@ final class Harness {
         return "メニューバー=\"\(text)\"(\(countdownViewModel.accessibilityLabel ?? "ラベルなし"))"
     }
 
-    /// 開いている詳細の、残り時間の対象のチェックボックス。`残り時間に含める=on|off|なし`。詳細を開いていなければ空。
+    /// 開いている詳細の、残り時間の対象のチェックボックス。`残り時間に含める=on|off`。詳細を開いていなければ空。
     private var countdownCheckboxSummary: String {
         guard let detail = viewModel.eventDetail else { return "" }
-        let state = detail.includedInCountdown.map { $0 ? "on" : "off" } ?? "なし"
+        let state = detail.includedInCountdown ? "on" : "off"
         return " 残り時間に含める=\(state)"
     }
 
