@@ -431,6 +431,35 @@ func runSnapshots(outputDirectory: URL) async throws {
         fixture.popover.showSchedule(of: SampleData.day(2026, 10, 23))
         try await render(popoverView(fixture), appearance: appearance, to: output(name))
     }
+    // 残り時間の記号。対象から外した時刻付きの予定（確認、設計会議）と、対象にした終日の予定（創立記念日、引っ越し）に付く。
+    // 日の欄（時間軸と終日の行）、月のマス目、2 列の月表示、コンパクト表示の予定一覧で確かめる。
+    func markCountdown(_ fixture: Fixture, titles: [(String, Bool)]) async throws {
+        for (title, included) in titles {
+            fixture.popover.showDetail(of: try eventID(titled: title))
+            await fixture.popover.setIncludedInCountdown(included)
+            fixture.popover.closeDetail()
+        }
+    }
+    let marked: [(String, Bool)] = [("確認", false), ("設計会議", false), ("創立記念日", true), ("引っ越し", true), ("1on1", false)]
+    for (name, appearance) in [("month-day-countdown-marks-light", NSAppearance.Name.aqua), ("month-day-countdown-marks-dark", .darkAqua)] {
+        let fixture = await loadedMonth()
+        try await markCountdown(fixture, titles: marked)
+        fixture.popover.showSchedule(of: SampleData.day(2026, 10, 23))
+        try await render(popoverView(fixture), appearance: appearance, to: output(name))
+    }
+    do {
+        let fixture = await loadedMonth()
+        try await markCountdown(fixture, titles: marked)
+        fixture.popover.showSchedule(of: SampleData.day(2026, 10, 23))
+        try await render(popoverView(fixture, visibleFrame: twoColumnFrame), appearance: .aqua, to: output("month-two-column-countdown-marks-light"))
+    }
+    for (name, appearance) in [("popover-countdown-marks-light", NSAppearance.Name.aqua), ("popover-countdown-marks-dark", .darkAqua)] {
+        let fixture = Fixture()
+        fixture.popover.reload()
+        await fixture.popover.waitForLoad()
+        try await markCountdown(fixture, titles: marked)
+        try await render(popoverView(fixture), appearance: appearance, to: output(name))
+    }
     // 辞退した予定（10 月 24 日）と未回答の予定（10 月 28 日）を含む日の欄。
     for (name, day, appearance) in [
         ("month-day-declined-light", 24, NSAppearance.Name.aqua), ("month-day-declined-dark", 24, .darkAqua),
