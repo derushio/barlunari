@@ -134,9 +134,9 @@ final class CanvasWarmup {
     /// スクロールが終わってから、先に用意し始めるまでの間隔。続けてスクロールを始める操作に、用意の処理を重ねないため。
     private static let preparationDelayAfterScroll: Duration = .milliseconds(250)
     /// 1 回の描画で先に用意する時間の上限。超えたら続きを次の描画に回す。
-    private static let preparationBudget: Duration = .milliseconds(3)
+    private static let preparationBudget: Duration = .milliseconds(5)
     /// 続きを用意する間隔。
-    private static let continuationInterval: Duration = .milliseconds(30)
+    private static let continuationInterval: Duration = .milliseconds(12)
 }
 
 /// 何も見えない `Canvas`。`CanvasWarmup` の合図で描き直す。
