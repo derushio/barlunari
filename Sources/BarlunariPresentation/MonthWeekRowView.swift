@@ -541,15 +541,7 @@ enum MonthWeekPainter {
                 topTrailingRadius: continuesToNext ? 0 : barRadius
             )
             let barPath = shape.path(in: bar)
-            if item.attendance == .declined {
-                // 辞退した帯は塗らず、薄い背景だけにして、取り消し線を引く。左端の線は引かないので、過去の帯とも区別できる。
-                context.fill(barPath, with: .color(roles.tintColor.opacity(CalendarPalette.pastTextOpacity)))
-                drawText(
-                    item.title, style: .title, color: .pastPrimary, in: &context,
-                    from: bar.minX + 6, to: bar.maxX - 4 - markReserve, midY: bar.midY, strikethrough: true
-                )
-                drawMark(markSymbol, color: Color.secondary, rightEdge: bar.maxX - 4, midY: bar.midY, in: &context)
-            } else if item.isPast || item.attendance == .needsResponse {
+            if item.isPast || item.attendance == .needsResponse {
                 // 過去の帯は塗らず、薄い背景と左端の線にして、標準の文字色で描く。未来の塗りの帯と形で区別する。
                 // 未回答の帯も塗らず、薄い背景を予定の色の点線で囲む。
                 context.fill(barPath, with: .color(roles.tintColor))
@@ -563,7 +555,7 @@ enum MonthWeekPainter {
                 if item.attendance == .needsResponse {
                     context.stroke(
                         shape.path(in: bar.insetBy(dx: 0.5, dy: 0.5)), with: .color(roles.accentColor),
-                        style: StrokeStyle(lineWidth: 1, dash: CalendarPalette.needsResponseDash)
+                        style: StrokeStyle(lineWidth: 1, dash: CalendarPalette.statusDash)
                     )
                 }
                 drawText(
@@ -591,17 +583,15 @@ enum MonthWeekPainter {
                     with: .color(roles.accentColor.opacity(CalendarPalette.pastOpacity)), lineWidth: pastDotLineWidth
                 )
             } else {
-                let opacity = item.attendance == .declined ? CalendarPalette.pastTextOpacity : 1
-                context.fill(Path(ellipseIn: dot), with: .color(roles.accentColor.opacity(opacity)))
+                context.fill(Path(ellipseIn: dot), with: .color(roles.accentColor))
             }
-            let isDeclined = item.attendance == .declined
             let needsResponse = item.attendance == .needsResponse
             // 未回答は、点・時刻・タイトルの行全体を予定の色の点線で囲む。枠の分だけ右端を内側に寄せる。
             let textMaxX = row.maxX - (needsResponse ? 4 : 2) - markReserve
             if needsResponse {
                 context.stroke(
                     Path(roundedRect: row.insetBy(dx: 0.5, dy: 0.5), cornerRadius: barRadius), with: .color(roles.accentColor),
-                    style: StrokeStyle(lineWidth: 1, dash: CalendarPalette.needsResponseDash)
+                    style: StrokeStyle(lineWidth: 1, dash: CalendarPalette.statusDash)
                 )
             }
             let timeX = dot.maxX + 4
@@ -610,8 +600,8 @@ enum MonthWeekPainter {
                 from: timeX, to: textMaxX, midY: row.midY
             )
             drawText(
-                item.title, style: .title, color: item.isPast || isDeclined ? .pastPrimary : .primary, in: &context,
-                from: timeX + timeWidth + 4, to: textMaxX, midY: row.midY, strikethrough: isDeclined
+                item.title, style: .title, color: item.isPast ? .pastPrimary : .primary, in: &context,
+                from: timeX + timeWidth + 4, to: textMaxX, midY: row.midY
             )
             drawMark(markSymbol, color: Color.secondary, rightEdge: textMaxX + markReserve, midY: row.midY, in: &context)
         }
@@ -673,11 +663,10 @@ enum MonthWeekPainter {
     private static let fitCacheLimit = 20_000
 
     /// 1 行の文字を、`from` から `to` の幅に収めて描く。収まらないときは末尾を「…」にする。描いた文字の幅を返す。
-    /// `strikethrough` なら、描いた幅の分だけ文字の中央に線を引く。
     @discardableResult
     private static func drawText(
         _ string: String, style: TextStyle, color: TextColor, in context: inout GraphicsContext,
-        from minX: CGFloat, to maxX: CGFloat, midY: CGFloat, strikethrough: Bool = false
+        from minX: CGFloat, to maxX: CGFloat, midY: CGFloat
     ) -> CGFloat {
         let available = maxX - minX
         guard available > 0 else { return 0 }
@@ -686,13 +675,6 @@ enum MonthWeekPainter {
         guard let text = fit.text else { return 0 }
         let resolved = resolvedText(text, style: style, color: color, in: context)
         context.draw(resolved, at: CGPoint(x: minX, y: midY), anchor: .leading)
-        if strikethrough {
-            // 解決した文字には取り消し線を付けられないので、描いた幅を使って線を引く。
-            var line = Path()
-            line.move(to: CGPoint(x: minX, y: midY))
-            line.addLine(to: CGPoint(x: minX + fit.width, y: midY))
-            context.stroke(line, with: .color(color.value), lineWidth: 1)
-        }
         return fit.width
     }
 

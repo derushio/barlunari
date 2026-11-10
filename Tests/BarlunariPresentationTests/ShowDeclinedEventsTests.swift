@@ -91,4 +91,16 @@ import Testing
             #expect(viewModel.snapshot.colorsByDay[oct24] == nil)
         }
     }
+
+    @Test(arguments: [true, false])
+    func 月のマス目には設定によらず辞退した予定を出さず日の欄と予定一覧には設定に従って出す(show: Bool) async throws {
+        let viewModel = await Harness(showDeclinedEvents: show).loadedPopover()
+        let layout = viewModel.monthWeekLayout(at: viewModel.displayedMonthFirstWeek + 3)
+        #expect(layout.items.contains { $0.title == "朝会" })
+        #expect(!layout.items.contains { $0.title == "辞退した会議" })
+        #expect(!layout.items.contains { $0.attendance == ListedAttendance.declined })
+
+        #expect(viewModel.selectedDaySchedule.blocks.contains { $0.item.title == "辞退した会議" } == show)
+        #expect(titles(viewModel, on: oct24).contains("辞退した会議") == show)
+    }
 }

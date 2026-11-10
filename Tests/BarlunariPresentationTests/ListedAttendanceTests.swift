@@ -64,11 +64,12 @@ import Testing
         #expect(viewModel.selectedDaySchedule.allDay.allSatisfy { $0.attendance == .none })
     }
 
-    @Test func 月のマス目の予定は辞退と未回答を持つ() async throws {
+    @Test func 月のマス目の予定は辞退した予定を含まず未回答を持つ() async throws {
         let viewModel = await Harness().loadedPopover()
         let week = viewModel.displayedMonthFirstWeek
         let declinedWeek = viewModel.monthWeekLayout(at: week + 3)
-        #expect(declinedWeek.items.first { $0.title == "辞退した会議" }?.attendance == .declined)
+        #expect(declinedWeek.items.first { $0.title == "辞退した会議" } == nil)
+        #expect(declinedWeek.items.allSatisfy { $0.attendance != .declined })
         #expect(declinedWeek.items.first { $0.title == "朝会" }?.attendance == ListedAttendance.none)
 
         let invitationWeek = viewModel.monthWeekLayout(at: week + 4)
