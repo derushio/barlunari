@@ -421,7 +421,7 @@ final class Harness {
         let settings = settingsOpener.openedDestinations.isEmpty ? "" : " システム設定=\(settingsOpener.openedDestinations)"
         let hiddenCount = viewModel.calendarFilterSections.flatMap(\.items).filter { !$0.isVisible }.count
         let filter = "\(viewModel.isCalendarFilterOpen ? "開" : "閉")(\(viewModel.calendarFilterPhase) 非表示=\(hiddenCount)件)"
-        return "\(settingsSummary) 設定を開いた=\(footerActions.openSettingsCount)回 終了=\(footerActions.quitCount)回 モード=\(viewModel.displayMode.rawValue) カレンダー一覧=\(filter) 選択日=\(viewModel.selectedDay) 表示月=\(viewModel.displayedMonth) 状態=\(viewModel.phase) 詳細=\(detail) 一覧=\(viewModel.agendaDayCount)日 選択日の件数=\(rows)件(終日\(schedule.allDay.count) 時刻付き\(schedule.blocks.count))\(escape)\(settings)\(rsvpSummary)\(countdownCheckboxSummary) \(menuBarSummary) 回答=\(responder.responses.count)件 回答失敗=\(isRSVPFailing ? "on" : "off") カレンダーで開いた=\(calendarAppOpener.openedEvents.count)件 取得=\(eventRepository.fetchCount)回 同期要求=\(sourceRefresher.refreshCount)回"
+        return "\(settingsSummary) 設定を開いた=\(footerActions.openSettingsCount)回 終了=\(footerActions.quitCount)回 モード=\(viewModel.displayMode.rawValue) カレンダー一覧=\(filter) 選択日=\(viewModel.selectedDay) 表示月=\(viewModel.displayedMonth) 状態=\(viewModel.phase) 詳細=\(detail) 一覧=\(viewModel.agendaDayCount)日 選択日の件数=\(rows)件(終日\(schedule.allDay.count) 時刻付き\(schedule.blocks.count))\(escape)\(settings)\(rsvpSummary)\(countdownCheckboxSummary) \(menuBarSummary) 回答=\(responder.responses.count)件 回答失敗=\(isRSVPFailing ? "on" : "off") カレンダーで開いた=\(calendarAppOpener.openedEvents.count)件 取得=\(eventRepository.fetchCount)回 同期要求=\(sourceRefresher.refreshCount)回 画像=\(viewModel.monthImageUsage.bytes / 1024 / 1024)MB/\(viewModel.monthImageUsage.weeks)週"
     }
 
     // MARK: イベントの合成
