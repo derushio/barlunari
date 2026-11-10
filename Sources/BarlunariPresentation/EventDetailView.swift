@@ -86,21 +86,7 @@ struct EventDetailView: View {
             if let calendarText = detail.calendarText {
                 infoRow("calendar") { Text(calendarText).textSelection(.enabled) }
             }
-            infoRow("timer") {
-                VStack(alignment: .leading, spacing: 2) {
-                    // 標準のチェックボックスにする。操作ツールの合成したクリックは、チェックボックスの NSButton には効く。
-                    Toggle(
-                        "メニューバーの残り時間に含める",
-                        isOn: Binding(get: { detail.includedInCountdown }, set: { actions.setIncludedInCountdown($0) })
-                    )
-                    .toggleStyle(.checkbox)
-                    if detail.isDeclined {
-                        Text("辞退した予定は残り時間に含めません")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-            }
+            countdownRow
             if let location = detail.location {
                 infoRow("mappin.and.ellipse") { Text(location).textSelection(.enabled) }
             }
@@ -139,6 +125,31 @@ struct EventDetailView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
+
+    /// 残り時間の対象のチェックボックスの行。アイコンは出さず、四角をほかの行のアイコンの列（幅 `iconColumnWidth`）の中心に置き、
+    /// タイトルをほかの行の文字と同じ x から始める。四角とタイトルは 1 つの `Toggle` で、タイトルを押しても切り替わる。
+    private var countdownRow: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Toggle(isOn: Binding(get: { detail.includedInCountdown }, set: { actions.setIncludedInCountdown($0) })) {
+                Text("メニューバーの残り時間に含める")
+                    .font(.callout)
+                    .padding(.leading, Self.countdownTitleLeadingPadding)
+            }
+            .toggleStyle(.checkbox)
+            if detail.isDeclined {
+                Text("辞退した予定は残り時間に含めません")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .padding(.leading, Self.iconColumnWidth + Self.iconTextSpacing)
+            }
+        }
+    }
+
+    /// 情報の行のアイコンの列の幅と、アイコンと文字の間隔。
+    private static let iconColumnWidth: CGFloat = 16
+    private static let iconTextSpacing: CGFloat = 6
+    /// チェックボックスの四角の右からタイトルまでの標準の間隔を補い、タイトルを文字の列に揃える。
+    private static let countdownTitleLeadingPadding: CGFloat = 2
 
     /// 出欠の回答欄。現在の出欠のボタンは塗りの記号と濃い背景で出し、色が見えなくても区別できるようにする。
     private func rsvpRow(_ rsvp: EventRSVPState) -> some View {
@@ -193,10 +204,10 @@ struct EventDetailView: View {
     }
 
     private func infoRow<Content: View>(_ systemImage: String, @ViewBuilder content: () -> Content) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 6) {
+        HStack(alignment: .firstTextBaseline, spacing: Self.iconTextSpacing) {
             Image(systemName: systemImage)
                 .foregroundStyle(.secondary)
-                .frame(width: 16)
+                .frame(width: Self.iconColumnWidth)
                 .accessibilityHidden(true)
             content()
                 .font(.callout)
