@@ -124,7 +124,7 @@ import Testing
         #expect(countdown.displayText == "22:00")
     }
 
-    @Test func 変更通知は進行中の取得を取り消さず終わってから一回だけ取得し直す() async {
+    @Test func 変更通知は進行中の取得を取り消さず終わってから一回だけ取得し直す() async throws {
         let harness = Harness()
         let center = NotificationCenter()
         let countdown = isolatedCountdown(harness, center: center)
@@ -137,7 +137,9 @@ import Testing
         #expect(await harness.eventRepository.requests.count == 1)
 
         await harness.eventRepository.resume(at: 0, events: SampleData.events)
-        await harness.eventRepository.waitForRequests(2)
+        await harness.eventRepository.waitForPending(2)
+        // 止めた取得がなければ、添字の外を再開してテストのプロセスごと落ちるため、先に確かめる。
+        try #require(await harness.eventRepository.pendingCount == 2)
         await harness.eventRepository.resume(at: 1, events: SampleData.events)
         await countdown.waitForLoad()
 
@@ -229,13 +231,20 @@ import Testing
 }
 
 extension ScriptedEventRepository {
-    /// 取得の呼び出しが `count` 回に達するまで、実行を譲る。時間は待たない。
+    /// 取得の呼び出しが `count` 回に達するまで待つ。並列に動くテストの負荷で遅れても先へ進まないよう、回数ではなく実時間で打ち切る。
     func waitForRequests(_ count: Int) async {
-        for _ in 0..<2000 where requests.count < count { await Task.yield() }
+        await waitWhile { requests.count < count }
     }
 
-    /// 返却を止められている取得が `count` 件になるまで、実行を譲る。時間は待たない。
+    /// 返却を止められている取得が `count` 件になるまで待つ。打ち切りは `waitForRequests(_:)` と同じ。
     func waitForPending(_ count: Int) async {
-        for _ in 0..<2000 where pendingCount < count { await Task.yield() }
+        await waitWhile { pendingCount < count }
+    }
+
+    private func waitWhile(_ condition: () -> Bool) async {
+        let deadline = ContinuousClock.now + .seconds(10)
+        while condition(), ContinuousClock.now < deadline {
+            try? await Task.sleep(for: .milliseconds(1))
+        }
     }
 }
