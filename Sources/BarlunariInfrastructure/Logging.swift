@@ -5,4 +5,5 @@ enum Log {
     static let subsystem = AppIdentity.bundleIdentifier
 
     static let calendar = Logger(subsystem: subsystem, category: "calendar")
+    static let launchAtLogin = Logger(subsystem: subsystem, category: "launchAtLogin")
 }

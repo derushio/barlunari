@@ -26,6 +26,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             menuBar.enableSelfCheck(simulatedSpaceChecks: simulated)
         }
         NSApp.mainMenu = MainMenu.make()
+        // 入れ替えたあとの起動で、ログイン項目が古いパスを指したままにならないようにする。
+        let launchAtLogin = container.launchAtLoginService
+        Task { await launchAtLogin.reregisterIfBundleMoved() }
         self.container = container
         settingsWindowController = settings
         menuBarController = menuBar
