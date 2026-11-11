@@ -26,7 +26,8 @@ EventKit との連携はすべて `BarlunariInfrastructure` に閉じ込めま�
 - 許可は、利用者がポップオーバーか設定画面の「カレンダーへのアクセスを許可」を押したときだけ求めます。起動時には求めません。ダイアログは、状態が `notDetermined` のときだけ出ます
 - 完全アクセスでなければ、`accounts()`、`calendars()`、`events(in:calendars:)` は `CalendarAccessError.notDetermined` か `.denied` を投げます。ユースケースも同じ型で投げます。カレンダーが 1 つもないときは、`LoadAgendaUseCase` が `.noCalendars` を投げます
 - 拒否のときは、`SystemSettingsDestination.calendarPrivacy` で「プライバシーとセキュリティ」のカレンダーを開くボタンを出します。カレンダーがないときは、`.internetAccounts` で「インターネットアカウント」を開くボタンを出します。開く操作は `OpenSystemSettingsUseCase` と `SystemSettingsOpener` を通し、`WorkspaceSystemSettingsOpener` が `NSWorkspace` で開きます
-- `.app` は ad-hoc 署名のため、ビルドし直すと macOS が別のアプリとして扱い、カレンダーへのアクセスの許可をもう一度求めることがあります。利用者向けの説明は `README.md` に書きます
+- `scripts/bundle.sh` は `scripts/codesign.sh` を呼び、専用のキーチェーンにある自己署名の証明書で `.app` を署名します。指定要件がバンドル ID と証明書になるので、ビルドし直してもカレンダーへのアクセスの許可は残ります。キーチェーンを削除すると証明書が作り直され、許可は付け直しになります。利用者向けの説明は `README.md` に書きます
+- git worktree で組み立てた `.app` は、バンドル ID の末尾に `.worktree.<worktree 名>` が付くので、main の `.app` とは別に許可を求めます
 
 ## 変更通知
 

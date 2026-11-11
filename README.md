@@ -84,7 +84,7 @@ Claude Code を使っている場合は、次のように頼むと、クロー�
 https://github.com/derushio/barlunari をクローンして、Barlunari.app を組み立てて起動して
 ```
 
-`scripts/bundle.sh` が作る `Barlunari.app` は ad-hoc 署名です。ビルドし直すと macOS が別のアプリとして扱い、カレンダーへのアクセスの許可をもう一度求めることがあります。その場合は、下の手順でもう一度許可します。
+`scripts/bundle.sh` は、`Barlunari.app` を自己署名の証明書で署名します。証明書は、初めて実行したときに `~/Library/Application Support/Barlunari Signing/` の専用のキーチェーンに作られ、以降は同じ証明書で署名します。ログインキーチェーンとキーチェーンの検索リストは変更しません。毎回同じ証明書で署名するので、ビルドし直してもカレンダーへのアクセスの許可は残ります。このディレクトリを削除すると証明書が作り直されるので、下の手順でもう一度許可します。
 
 ## 予定を表示する準備
 
