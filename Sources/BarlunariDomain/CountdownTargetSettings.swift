@@ -5,6 +5,7 @@ import Foundation
 /// 予定の同一性（`CalendarEvent.Identity`）と、対象にするかの真偽の組を持つ。
 /// 繰り返しの予定は回ごとに ID が異なるので、設定は回ごとになる。
 /// 選んでいない予定は、既定の値に従う。既定は、時刻付きの予定は対象、終日の予定は対象外である。
+/// 終日の予定は選択があっても対象にならない。その判定は `CountdownTargetPolicy` が行い、この型は選択を保存済みの値のまま持つ。
 /// カレンダーごとの設定は `CountdownCalendarSettings` が別に持ち、合わせた判定は `CountdownTargetPolicy` が行う。
 /// 参加状況（辞退など）は、この設定にも既定の値にも影響しない。辞退した予定を残り時間に数えないのは `NextEventCountdown` が決める。
 public struct CountdownTargetSettings: Sendable, Hashable {
@@ -15,7 +16,7 @@ public struct CountdownTargetSettings: Sendable, Hashable {
         self.choices = choices
     }
 
-    /// 選んでいない予定の既定の値。時刻付きは対象、終日は対象外。
+    /// 選んでいない予定の既定の値。時刻付きは対象、終日は対象外。終日の予定が選択に関係なく対象外になる規則は `CountdownTargetPolicy` にある。
     public static func isTargetByDefault(_ schedule: EventSchedule) -> Bool {
         !schedule.isAllDay
     }
