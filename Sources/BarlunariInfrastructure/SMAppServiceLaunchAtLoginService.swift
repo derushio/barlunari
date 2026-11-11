@@ -1,23 +1,53 @@
+import Foundation
 import ServiceManagement
 import BarlunariApplication
 
+/// `SMAppService.mainApp` を `LoginItemRegistrar` として使う。
+struct SMAppServiceRegistrar: LoginItemRegistrar {
+    var isEnabled: Bool { SMAppService.mainApp.status == .enabled }
+
+    var isRegistered: Bool {
+        let status = SMAppService.mainApp.status
+        return status == .enabled || status == .requiresApproval
+    }
+
+    func register() throws {
+        try SMAppService.mainApp.register()
+    }
+
+    func unregister() async throws {
+        try await SMAppService.mainApp.unregister()
+    }
+}
+
 /// `SMAppService.mainApp` でログイン時の起動を登録する。登録状態は macOS 側を正とする。
+/// 登録したバンドルのパスだけはアプリ側で記録し、起動時に今のパスと違えば登録し直す。
 public struct SMAppServiceLaunchAtLoginService: LaunchAtLoginService {
-    public init() {}
+    private let registration: LaunchAtLoginRegistration
+
+    public init() {
+        self.init(defaults: .standard)
+    }
+
+    init(defaults: UserDefaults) {
+        registration = LaunchAtLoginRegistration(
+            registrar: SMAppServiceRegistrar(),
+            pathStore: UserDefaultsRegisteredBundlePathStore(defaults: defaults),
+            currentBundleURL: Bundle.main.bundleURL,
+            logError: { Log.launchAtLogin.error("\($0, privacy: .public)") }
+        )
+    }
 
     public func isEnabled() async -> Bool {
-        SMAppService.mainApp.status == .enabled
+        SMAppServiceRegistrar().isEnabled
     }
 
     public func setEnabled(_ enabled: Bool) async throws {
-        let service = SMAppService.mainApp
-        if enabled {
-            // 登録済みの状態で register すると失敗するため、有効なときは何もしない。
-            guard service.status != .enabled else { return }
-            try service.register()
-        } else {
-            guard service.status == .enabled || service.status == .requiresApproval else { return }
-            try await service.unregister()
-        }
+        try await registration.setEnabled(enabled)
+    }
+
+    /// アプリを移した（例: `build/` から `/Applications` へ）あとの起動で、ログイン項目を今のパスに向け直す。
+    public func reregisterIfBundleMoved() async {
+        await registration.reregisterIfBundleMoved()
     }
 }

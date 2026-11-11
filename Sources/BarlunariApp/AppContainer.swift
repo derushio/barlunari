@@ -10,6 +10,8 @@ final class AppContainer {
     let popoverViewModel: CalendarPopoverViewModel
     let settingsViewModel: SettingsViewModel
     let countdownViewModel: MenuBarCountdownViewModel
+    /// 起動時に、ログイン項目のパスを今のバンドルへ向け直すために使う。
+    let launchAtLoginService: SMAppServiceLaunchAtLoginService
 
     init() {
         // 設定の「週の始まり」を保存する。ポップオーバーと設定画面に同じ保存先を渡す。
@@ -28,6 +30,7 @@ final class AppContainer {
         let displayModeStore = UserDefaultsDisplayModeStore()
         let showDeclinedEventsStore = UserDefaultsShowDeclinedEventsStore()
         let launchAtLoginService = SMAppServiceLaunchAtLoginService()
+        self.launchAtLoginService = launchAtLoginService
 
         let requestCalendarAccess = RequestCalendarAccessUseCase(authorizer: calendarStore)
         let openSystemSettings = OpenSystemSettingsUseCase(opener: systemSettingsOpener)
