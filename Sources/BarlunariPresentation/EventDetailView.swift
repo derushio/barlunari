@@ -130,14 +130,22 @@ struct EventDetailView: View {
     /// タイトルをほかの行の文字と同じ x から始める。四角とタイトルは 1 つの `Toggle` で、タイトルを押しても切り替わる。
     private var countdownRow: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Toggle(isOn: Binding(get: { detail.includedInCountdown }, set: { actions.setIncludedInCountdown($0) })) {
-                Text("メニューバーの残り時間に含める")
-                    .font(.callout)
-                    .padding(.leading, Self.countdownTitleLeadingPadding)
+            if detail.canBeCountdownTarget {
+                Toggle(isOn: Binding(get: { detail.includedInCountdown }, set: { actions.setIncludedInCountdown($0) })) {
+                    Text("メニューバーの残り時間に含める")
+                        .font(.callout)
+                        .padding(.leading, Self.countdownTitleLeadingPadding)
+                }
+                .toggleStyle(.checkbox)
+                // チェックボックスの部品は文字 1 行より下に高い。その分を打ち消し、行の間隔をほかの行と同じにする。
+                .padding(.bottom, -Self.checkboxExtraHeight)
+            } else {
+                // 操作できないチェックボックスは出さず、含めない理由を文で示す。
+                Text("終日の予定は残り時間に含めません")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .padding(.leading, Self.iconColumnWidth + Self.iconTextSpacing)
             }
-            .toggleStyle(.checkbox)
-            // チェックボックスの部品は文字 1 行より下に高い。その分を打ち消し、行の間隔をほかの行と同じにする。
-            .padding(.bottom, -Self.checkboxExtraHeight)
             if detail.isDeclined {
                 Text("辞退した予定は残り時間に含めません")
                     .font(.caption)

@@ -428,6 +428,7 @@ final class Harness {
     /// 開いている詳細の、残り時間の対象のチェックボックス。`残り時間に含める=on|off`。詳細を開いていなければ空。
     private var countdownCheckboxSummary: String {
         guard let detail = viewModel.eventDetail else { return "" }
+        guard detail.canBeCountdownTarget else { return " 残り時間に含める=なし(終日)" }
         let state = detail.includedInCountdown ? "on" : "off"
         return " 残り時間に含める=\(state)"
     }

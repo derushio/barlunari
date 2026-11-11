@@ -230,7 +230,7 @@ import Testing
         #expect(countdown.displayText == "02:00")
     }
 
-    @Test func 終日予定は詳細で対象にするとその日の0時までの残り時間になる() async throws {
+    @Test func 終日予定は詳細で対象にする操作をしても残り時間に数えない() async throws {
         let harness = Harness(events: SampleData.events.filter { $0.title == "引っ越し" })
         let countdown = await started(harness)
         #expect(countdown.displayText == nil)
@@ -240,10 +240,16 @@ import Testing
         let row = try #require(popover.selectedSection.rows.first { $0.title == "引っ越し" })
         popover.showDetail(of: row)
         await popover.setIncludedInCountdown(true)
-        // 現在は 10/24 12:00。10/25 の 0:00 まで 12 時間。
-        await waitUntil { countdown.displayText == "12:00" }
         await countdown.waitForLoad()
-        #expect(countdown.displayText == "12:00")
+        #expect(countdown.displayText == nil)
+    }
+
+    @Test func 終日予定に保存済みの選択があっても残り時間に数えない() async throws {
+        let allDay = try #require(SampleData.events.first { $0.title == "引っ越し" })
+        let harness = Harness(events: [allDay])
+        try await harness.countdownSettings.update { $0.set(allDay.id, isTarget: true) }
+        let countdown = await started(harness)
+        #expect(countdown.displayText == nil)
     }
 
     @Test func 辞退した予定は詳細で対象にしても数えない() async throws {

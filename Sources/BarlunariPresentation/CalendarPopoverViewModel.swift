@@ -829,9 +829,10 @@ public final class CalendarPopoverViewModel {
     /// 詳細の予定を、メニューバーの残り時間の対象に含めるかを切り替える。
     ///
     /// 先に詳細の表示を変えてから保存し、失敗したら元に戻す。保存できたら、メニューバーの表示に伝える。
-    /// 予定は読み込み直さない。どの予定でも切り替えられる（終日、開始済み、辞退も含む）。すでにその状態のときは何もしない。
+    /// 予定は読み込み直さない。開始済み、辞退した予定も切り替えられる。対象になりえない予定（終日）と、すでにその状態のときは何もしない。
     public func setIncludedInCountdown(_ included: Bool) async {
         guard let id = detailEventID, let event = detailEvent(for: id),
+              countdownPolicy.canBeTarget(event),
               countdownPolicy.isTarget(event) != included
         else { return }
         let previous = countdownPolicy
@@ -1223,6 +1224,7 @@ public final class CalendarPopoverViewModel {
             detailURL: event.detailURL,
             attendanceText: event.attendance.displayText,
             includedInCountdown: countdownPolicy.isTarget(event),
+            canBeCountdownTarget: countdownPolicy.canBeTarget(event),
             isCalendarExcludedFromCountdown: !countdownPolicy.calendars.isIncluded(event.calendarIdentity),
             isDeclined: event.attendance == .declined,
             rsvp: event.canRespond ? rsvpState(for: event) : nil,
