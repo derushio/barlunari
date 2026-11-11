@@ -10,15 +10,18 @@ protocol LoginItemRegistrar: Sendable {
     func unregister() async throws
 }
 
-/// 最後に登録したときのバンドルのパスの保存先。
+/// 最後に登録したときのバンドルのパスと、登録し直しの途中かの保存先。
 protocol RegisteredBundlePathStore: Sendable {
     func load() -> String?
     func save(_ path: String)
+    func isReregistrationPending() -> Bool
+    func setReregistrationPending(_ pending: Bool)
 }
 
 /// `UserDefaults` に登録したバンドルのパスを保存する。
 final class UserDefaultsRegisteredBundlePathStore: RegisteredBundlePathStore {
     static let key = "launchAtLoginRegisteredBundlePath"
+    static let pendingKey = "launchAtLoginReregistrationPending"
 
     // UserDefaults はスレッドセーフだが Sendable と宣言されていないため、ここで安全性を保証する。
     private nonisolated(unsafe) let defaults: UserDefaults
@@ -33,6 +36,14 @@ final class UserDefaultsRegisteredBundlePathStore: RegisteredBundlePathStore {
 
     func save(_ path: String) {
         defaults.set(path, forKey: Self.key)
+    }
+
+    func isReregistrationPending() -> Bool {
+        defaults.bool(forKey: Self.pendingKey)
+    }
+
+    func setReregistrationPending(_ pending: Bool) {
+        defaults.set(pending, forKey: Self.pendingKey)
     }
 }
 
@@ -88,7 +99,10 @@ struct LaunchAtLoginRegistration: Sendable {
             if registrar.isEnabled { return }
             try registrar.register()
             pathStore.save(currentBundlePath)
+            pathStore.setReregistrationPending(false)
         } else {
+            // 利用者が無効にしたら、起動時に登録し直さない。
+            pathStore.setReregistrationPending(false)
             guard registrar.isRegistered else { return }
             try await registrar.unregister()
         }
@@ -96,18 +110,27 @@ struct LaunchAtLoginRegistration: Sendable {
 
     /// 起動時に呼ぶ。ログイン項目が古いパスを指しているおそれがあれば、登録し直す。
     func reregisterIfBundleMoved() async {
-        guard Self.needsReregistration(
+        // 前の起動で解除のあとの register を使い切っていれば、ログイン項目は無効になっている。無効でも register からやり直す。
+        let pending = pathStore.isReregistrationPending()
+        guard pending || Self.needsReregistration(
             isEnabled: registrar.isEnabled,
             recordedPath: pathStore.load(),
             currentPath: currentBundlePath
         ) else { return }
 
-        do {
-            try await registrar.unregister()
-        } catch {
-            // 解除できなければ、元の登録が残っている。register すると二重になるので何もしない。次の起動で再試行する。
-            logError("ログイン項目の登録解除に失敗した: \(error)")
-            return
+        if registrar.isRegistered {
+            // 解除したあと register を使い切ると、ログイン項目が無効になり、次の起動では有効かどうかで判定できない。
+            // 解除する前に、登録し直しの途中であることを記録する。
+            pathStore.setReregistrationPending(true)
+            do {
+                try await registrar.unregister()
+            } catch {
+                // 解除できなければ、元の登録が残っている。register すると二重になるので何もしない。
+                // パスの記録は古いままなので、次の起動でもう一度登録し直す。
+                pathStore.setReregistrationPending(pending)
+                logError("ログイン項目の登録解除に失敗した: \(error)")
+                return
+            }
         }
 
         var attempt = 0
@@ -115,10 +138,11 @@ struct LaunchAtLoginRegistration: Sendable {
             do {
                 try registrar.register()
                 pathStore.save(currentBundlePath)
+                pathStore.setReregistrationPending(false)
                 return
             } catch {
                 guard attempt < retryDelays.count else {
-                    // 記録は更新しない。外れたままでも、次の起動時にもう一度登録し直す。
+                    // 登録し直しの途中の記録を残すので、次の起動で register からやり直す。
                     logError("ログイン項目の再登録に失敗した（\(attempt + 1) 回目、あきらめる）: \(error)")
                     return
                 }

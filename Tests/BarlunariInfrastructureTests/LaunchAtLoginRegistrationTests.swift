@@ -45,9 +45,12 @@ private final class FakeRegistrar: LoginItemRegistrar, @unchecked Sendable {
 private final class FakePathStore: RegisteredBundlePathStore, @unchecked Sendable {
     private let lock = NSLock()
     private var path: String?
+    private var pending = false
     init(path: String?) { self.path = path }
     func load() -> String? { lock.withLock { path } }
     func save(_ path: String) { lock.withLock { self.path = path } }
+    func isReregistrationPending() -> Bool { lock.withLock { pending } }
+    func setReregistrationPending(_ pending: Bool) { lock.withLock { self.pending = pending } }
 }
 
 private final class Recorder: @unchecked Sendable {
@@ -154,6 +157,20 @@ private func makeRegistration(
         #expect(store.load() == oldPath)
     }
 
+    @Test func 再試行を使い切ったら次の起動でregisterからやり直す() async {
+        // 1 回目の起動では 3 回とも失敗し、2 回目の起動では成功する。
+        let registrar = FakeRegistrar(enabled: true, registerFailures: 3)
+        let store = FakePathStore(path: oldPath)
+        let recorder = Recorder()
+        let registration = makeRegistration(registrar: registrar, store: store, recorder: recorder)
+        await registration.reregisterIfBundleMoved()
+        #expect(!registrar.isEnabled)
+        await registration.reregisterIfBundleMoved()
+        #expect(registrar.recordedCalls == ["unregister", "register", "register", "register", "register"])
+        #expect(registrar.isEnabled)
+        #expect(store.load() == currentPath)
+    }
+
     @Test func unregisterが失敗したらregisterせずエラーを記録する() async {
         let registrar = FakeRegistrar(enabled: true, unregisterFails: true)
         let store = FakePathStore(path: oldPath)
@@ -183,8 +200,10 @@ private func makeRegistration(
     @Test func 設定画面で無効にするとunregisterする() async throws {
         let registrar = FakeRegistrar(enabled: true)
         let store = FakePathStore(path: currentPath)
+        store.setReregistrationPending(true)
         try await makeRegistration(registrar: registrar, store: store, recorder: Recorder()).setEnabled(false)
         #expect(registrar.recordedCalls == ["unregister"])
+        #expect(!store.isReregistrationPending())
     }
 }
 
@@ -197,5 +216,8 @@ private func makeRegistration(
         #expect(store.load() == nil)
         store.save(currentPath)
         #expect(UserDefaultsRegisteredBundlePathStore(defaults: defaults).load() == currentPath)
+        #expect(!store.isReregistrationPending())
+        store.setReregistrationPending(true)
+        #expect(UserDefaultsRegisteredBundlePathStore(defaults: defaults).isReregistrationPending())
     }
 }
