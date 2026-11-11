@@ -3,7 +3,7 @@ import Foundation
 /// 次の予定の開始までの残り時間。メニューバーの項目に `HH:mm` で出す。
 ///
 /// 対象になる予定は、`CountdownTargetPolicy` で対象になり、開始が現在より後で、残りが 24 時間未満のもの（表示の最大は `23:59`）。
-/// 自分が辞退した予定（`attendance == .declined`）は、設定にかかわらず数えない。ほかの参加状況は見ない。終日の予定は、対象にしたときだけ数え、開始はその日の 0:00 とする。
+/// 自分が辞退した予定（`attendance == .declined`）は、設定にかかわらず数えない。ほかの参加状況は見ない。終日の予定は `CountdownTargetPolicy` で常に対象外なので数えない。
 public struct NextEventCountdown: Sendable, Hashable {
     /// 表示する残り時間の上限（分）。これ以上先の予定は対象にしない。
     public static let maximumRemainingMinutes = 24 * 60
@@ -32,7 +32,7 @@ public struct NextEventCountdown: Sendable, Hashable {
         self.remainingMinutes = minutes
     }
 
-    /// 予定の開始日時。時刻付きは開始の時刻、終日は最初の日の 0:00（`calendar` の暦）。
+    /// 予定の開始日時。時刻付きは開始の時刻、終日は最初の日の 0:00（`calendar` の暦）。終日の予定は `next(in:policy:at:calendar:)` では数えない。
     public static func start(of event: CalendarEvent, calendar: Calendar) -> Date {
         switch event.schedule {
         case .timed(let interval): interval.start

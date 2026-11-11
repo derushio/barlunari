@@ -69,18 +69,17 @@ import Testing
         #expect(countdown([timed("a", after: 0)]) == nil)
     }
 
-    @Test func 終日予定は既定では対象にしない() {
+    @Test func 終日予定は数えない() {
         #expect(countdown([allDay("a")]) == nil)
     }
 
-    @Test func 終日予定を対象にするとその日の0時までの残り時間になる() {
+    @Test func 終日予定は予定ごとの選択があっても数えず時刻付きの予定を選ぶ() {
         let event = allDay("a")
         var settings = CountdownTargetSettings()
         settings.set(event.id, isTarget: true)
-        let result = countdown([event], settings: settings)
-        // now は 10/24 12:00、終日予定は 10/25 の 0:00 開始なので 12 時間。
-        #expect(result?.start == TestSupport.date(2026, 10, 25, 0, 0))
-        #expect(result?.remainingMinutes == 720)
+        // now は 10/24 12:00、終日予定は 10/25 の 0:00 開始で 12 時間先にあるが、数えない。
+        #expect(countdown([event], settings: settings) == nil)
+        #expect(countdown([event, timed("t", after: 1800)], settings: settings)?.remainingMinutes == 30)
     }
 
     @Test func 辞退した予定は設定にかかわらず数えず他の参加状況は判定に使わない() {
@@ -211,7 +210,7 @@ import Testing
         settings.set(timed.id, isTarget: false)
         settings.set(allDay.id, isTarget: true)
         #expect(!CountdownTargetPolicy(events: settings).isTarget(timed))
-        #expect(CountdownTargetPolicy(events: settings).isTarget(allDay))
+        #expect(!CountdownTargetPolicy(events: settings).isTarget(allDay))
         settings.set(timed.id, isTarget: true)
         #expect(CountdownTargetPolicy(events: settings).isTarget(timed))
     }
@@ -255,6 +254,21 @@ import Testing
         #expect(!policy.isTarget(event("a", allDay: true)))
         #expect(policy.isTargetByDefault(event("a")))
         #expect(!policy.isTargetByDefault(event("a", allDay: true)))
+    }
+
+    @Test func 終日の予定は対象になりえず予定ごとの選択とカレンダーの設定にかかわらず対象外() {
+        let allDay = event("a", allDay: true)
+        #expect(CountdownTargetPolicy().canBeTarget(event("t")))
+        #expect(!CountdownTargetPolicy().canBeTarget(allDay))
+        var policy = CountdownTargetPolicy()
+        policy.choose(allDay.id, isTarget: true)
+        #expect(!policy.isTarget(allDay))
+        #expect(!policy.isTargetByDefault(allDay))
+        // 含めるカレンダーでも、含めないカレンダーでも同じ。選択は保存済みの値のまま残る。
+        var excluded = CountdownTargetPolicy(events: policy.events, calendars: excluding(work))
+        excluded.choose(allDay.id, isTarget: true)
+        #expect(!excluded.isTarget(allDay))
+        #expect(excluded.events.choice(for: allDay.id) == true)
     }
 
     @Test func 含めないカレンダーの予定は既定も対象外になる() {

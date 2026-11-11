@@ -28,11 +28,16 @@ import Testing
         #expect(CountdownMark.excluded.label == "残り時間の対象外")
     }
 
-    @Test func 対象にした終日の予定には含めた記号を付ける() throws {
+    @Test func 終日の予定は保存済みの選択があっても記号を付けない() throws {
         let allDay = try event(titled: "引っ越し")
-        var settings = CountdownTargetSettings()
-        settings.set(allDay.id, isTarget: true)
-        #expect(CountdownMark(allDay, policy: CountdownTargetPolicy(events: settings)) == .included)
+        for isTarget in [true, false] {
+            var settings = CountdownTargetSettings()
+            settings.set(allDay.id, isTarget: isTarget)
+            #expect(CountdownMark(allDay, policy: CountdownTargetPolicy(events: settings)) == .none)
+        }
+    }
+
+    @Test func 含めた記号の見た目() {
         #expect(CountdownMark.included.symbolName == "clock.badge.checkmark")
         #expect(CountdownMark.included.label == "残り時間の対象")
     }

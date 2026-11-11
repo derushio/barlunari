@@ -446,9 +446,15 @@ import Testing
         #expect(viewModel.eventDetail?.isDeclined == false)
     }
 
-    @Test func 終日予定は既定でオフ() async throws {
+    @Test func 終日予定は対象になりえず詳細でチェックボックスの代わりに説明を出す状態になる() async throws {
         let viewModel = try await openAllDayDetail(in: Harness())
         #expect(viewModel.eventDetail?.includedInCountdown == false)
+        #expect(viewModel.eventDetail?.canBeCountdownTarget == false)
+    }
+
+    @Test func 時刻付きの予定は対象になりうる() async throws {
+        let viewModel = try await openDetail(titled: "デザインレビュー", in: Harness())
+        #expect(viewModel.eventDetail?.canBeCountdownTarget == true)
     }
 
     @Test func 二十四時間より先の予定も既定でオン() async throws {
@@ -483,18 +489,27 @@ import Testing
         #expect(await harness.countdownSettings.load().choices[id] == true)
     }
 
-    @Test func 終日予定を対象にして保存し読み直しても残る() async throws {
+    @Test func 終日予定は対象にする操作をしても何も保存せず対象外のまま() async throws {
         let harness = Harness()
         let viewModel = try await openAllDayDetail(in: harness)
-        let id = try #require(viewModel.detailEventID)
 
         await viewModel.setIncludedInCountdown(true)
-        #expect(viewModel.eventDetail?.includedInCountdown == true)
-        #expect(await harness.countdownSettings.load().choices[id] == true)
 
-        viewModel.reload()
-        await viewModel.waitForLoad()
-        #expect(viewModel.eventDetail?.includedInCountdown == true)
+        #expect(viewModel.eventDetail?.includedInCountdown == false)
+        #expect(await harness.countdownSettings.load().choices.isEmpty)
+        #expect(await harness.countdownSettings.updateCount == 0)
+    }
+
+    @Test func 終日予定に保存済みの選択があっても対象外のまま残る() async throws {
+        let harness = Harness()
+        let allDay = try #require(SampleData.events.first { $0.title == "引っ越し" })
+        try await harness.countdownSettings.update { $0.set(allDay.id, isTarget: true) }
+        let viewModel = try await openAllDayDetail(in: harness)
+
+        #expect(viewModel.eventDetail?.includedInCountdown == false)
+        #expect(viewModel.eventDetail?.canBeCountdownTarget == false)
+        // 保存済みの値は消さない。
+        #expect(await harness.countdownSettings.load().choices[allDay.id] == true)
     }
 
     @Test func 辞退した予定の設定も切り替えて保存できる() async throws {

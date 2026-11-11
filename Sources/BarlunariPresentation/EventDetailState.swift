@@ -15,8 +15,10 @@ public struct EventDetailState: Equatable, Sendable {
     public let detailURL: URL?
     /// 自分の出欠。出欠の概念がない予定では `nil`。
     public let attendanceText: String?
-    /// メニューバーの残り時間に含めるか。利用者が予定ごとに選んだ値、なければ既定の値（含めるカレンダーの時刻付きは含める、終日と含めないカレンダーは含めない）。参加状況に左右されない。
+    /// メニューバーの残り時間に含めるか。利用者が予定ごとに選んだ値、なければ既定の値（含めるカレンダーの時刻付きは含める、含めないカレンダーは含めない）。終日の予定は常に `false`。参加状況に左右されない。
     public let includedInCountdown: Bool
+    /// 残り時間の対象になりうる予定か。`false`（終日の予定）では、View はチェックボックスを出さず、含めない理由の文を出す。
+    public let canBeCountdownTarget: Bool
     /// 予定のカレンダーが、カレンダーの設定で残り時間に含めない設定か。予定ごとの選択が優先されるので、チェックがオンでも `true` になる。View が説明を出す。
     public let isCalendarExcludedFromCountdown: Bool
     /// 自分が辞退した予定か。辞退した予定は、チェックボックスがオンでも残り時間に数えないので、View が説明を出す。

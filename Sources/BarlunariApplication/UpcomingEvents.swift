@@ -8,7 +8,7 @@ public struct UpcomingEvents: Sendable, Equatable {
     public let policy: CountdownTargetPolicy
     /// 取得した範囲の終わり。これより後に始まる予定は `events` に入っていない。
     public let rangeEnd: Date
-    /// 終日の予定の開始（その日の 0:00）を求める暦。
+    /// 予定の開始日時を求める暦。
     public let calendar: Calendar
 
     public init(events: [CalendarEvent], policy: CountdownTargetPolicy, rangeEnd: Date, calendar: Calendar) {
