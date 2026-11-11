@@ -275,7 +275,7 @@ func runSnapshots(outputDirectory: URL) async throws {
         }
     }
 
-    // 終日の予定の詳細（既定でチェックがオフ）と、辞退した予定の詳細（チェックがオンで、残り時間に含めない説明が出る）。
+    // 終日の予定の詳細（チェックボックスがなく、残り時間に含めない説明が出る）と、辞退した予定の詳細（チェックがオンで、残り時間に含めない説明が出る）。
     for (title, name, showDeclined) in [("引っ越し", "popover-detail-countdown-allday", false), ("辞退した会議", "popover-detail-countdown-declined", true)] {
         guard let id = SampleData.events.first(where: { $0.title == title })?.id else {
             throw SnapshotError.renderFailed("サンプルに「\(title)」がない")
@@ -454,8 +454,17 @@ func runSnapshots(outputDirectory: URL) async throws {
         fixture.popover.showSchedule(of: SampleData.day(2026, 10, 23))
         try await render(popoverView(fixture), appearance: appearance, to: output(name))
     }
-    // 残り時間の記号。対象から外した時刻付きの予定（確認、設計会議）と、対象にした終日の予定（創立記念日、引っ越し）に付く。
+    // 残り時間の記号。「仕事」カレンダーを残り時間に含めない設定にして、対象から外した時刻付きの予定（確認）と、
+    // 含めないカレンダーの予定を個別に対象にしたもの（設計会議、週次定例、1on1）に付く。終日の予定（創立記念日、引っ越し）には付かない。
     // 日の欄（時間軸と終日の行）、月のマス目、2 列の月表示、コンパクト表示の予定一覧で確かめる。
+    func loadedMarkMonth() async -> Fixture {
+        let fixture = Fixture(
+            events: SampleData.monthViewEvents, displayMode: .month, countdownExcludedCalendars: [SampleData.workCalendar]
+        )
+        fixture.popover.reload()
+        await fixture.popover.waitForLoad()
+        return fixture
+    }
     func markCountdown(_ fixture: Fixture, titles: [(String, Bool)]) async throws {
         for (title, included) in titles {
             fixture.popover.showDetail(of: try eventID(titled: title))
@@ -463,21 +472,21 @@ func runSnapshots(outputDirectory: URL) async throws {
             fixture.popover.closeDetail()
         }
     }
-    let marked: [(String, Bool)] = [("確認", false), ("設計会議", false), ("創立記念日", true), ("引っ越し", true), ("1on1", false)]
+    let marked: [(String, Bool)] = [("確認", false), ("設計会議", true), ("週次定例", true), ("1on1", true)]
     for (name, appearance) in [("month-day-countdown-marks-light", NSAppearance.Name.aqua), ("month-day-countdown-marks-dark", .darkAqua)] {
-        let fixture = await loadedMonth()
+        let fixture = await loadedMarkMonth()
         try await markCountdown(fixture, titles: marked)
         fixture.popover.showSchedule(of: SampleData.day(2026, 10, 23))
         try await render(popoverView(fixture), appearance: appearance, to: output(name))
     }
     do {
-        let fixture = await loadedMonth()
+        let fixture = await loadedMarkMonth()
         try await markCountdown(fixture, titles: marked)
         fixture.popover.showSchedule(of: SampleData.day(2026, 10, 23))
         try await render(popoverView(fixture, visibleFrame: twoColumnFrame), appearance: .aqua, to: output("month-two-column-countdown-marks-light"))
     }
     for (name, appearance) in [("popover-countdown-marks-light", NSAppearance.Name.aqua), ("popover-countdown-marks-dark", .darkAqua)] {
-        let fixture = Fixture()
+        let fixture = Fixture(countdownExcludedCalendars: [SampleData.workCalendar])
         fixture.popover.reload()
         await fixture.popover.waitForLoad()
         try await markCountdown(fixture, titles: marked)
