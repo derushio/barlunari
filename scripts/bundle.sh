@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# release ビルドの BarlunariApp から build/Barlunari.app を組み立て、ad-hoc 署名する。
+# release ビルドの BarlunariApp から build/Barlunari.app を組み立て、scripts/codesign.sh で署名する。
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -14,6 +14,14 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN_DIR/BarlunariApp" "$APP/Contents/MacOS/Barlunari"
 
+# Sources/BarlunariInfrastructure/AppIdentity.swift と同じ値にする。
+# 同じバンドル ID の .app が複数のパスにあると、LaunchServices が別のコピーを選び、システム設定がそのコピーに許可を付ける。
+# worktree を消すとそのパスがなくなるため、worktree で組み立てた .app には worktree 名を付けた別のバンドル ID を付ける。
+BUNDLE_ID="io.github.derushio.Barlunari"
+if [ "$(git -C "$ROOT" rev-parse --absolute-git-dir)" != "$(git -C "$ROOT" rev-parse --path-format=absolute --git-common-dir)" ]; then
+    BUNDLE_ID="$BUNDLE_ID.worktree.$(basename "$ROOT" | LC_ALL=C tr -c 'A-Za-z0-9.\n' '-')"
+fi
+
 # LSUIElement を true にして、Dock とアプリ切り替えに出さない。
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -21,7 +29,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 <plist version="1.0">
 <dict>
     <key>CFBundleIdentifier</key>
-    <string>io.github.derushio.Barlunari</string>
+    <string>${BUNDLE_ID}</string>
     <key>CFBundleName</key>
     <string>Barlunari</string>
     <key>CFBundleDisplayName</key>
@@ -45,6 +53,5 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 PLIST
 
 plutil -lint "$APP/Contents/Info.plist"
-codesign --force --sign - "$APP"
-codesign --verify --verbose=2 "$APP"
+"$ROOT/scripts/codesign.sh" "$APP"
 echo "作成した: $APP"
