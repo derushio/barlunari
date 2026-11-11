@@ -18,7 +18,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             quit: { NSApp.terminate(nil) }
         )
         menuBar.install()
-        if ProcessInfo.processInfo.environment["BARLUNARI_PANEL_SELF_CHECK"] == "1" { menuBar.enableSelfCheck() }
+        let environment = ProcessInfo.processInfo.environment
+        if environment["BARLUNARI_PANEL_SELF_CHECK"] == "1" {
+            // 例: "1,0,0" は、開いた直後は今の操作スペースにあり、そのあとの 2 回の確かめでは外れているとみなす。
+            let simulated = (environment["BARLUNARI_PANEL_SELF_CHECK_SPACE"] ?? "")
+                .split(separator: ",").map { $0 == "1" }
+            menuBar.enableSelfCheck(simulatedSpaceChecks: simulated)
+        }
         NSApp.mainMenu = MainMenu.make()
         self.container = container
         settingsWindowController = settings

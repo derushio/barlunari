@@ -26,6 +26,10 @@ public final class MenuBarController: NSObject {
     private var isShown = false
     private var globalMouseMonitor: Any?
     private var workspaceObservers: [any NSObjectProtocol] = []
+    /// 開いたあとに、パネルが今の操作スペースから外れていないかを確かめる処理。確かめ終えるか閉じるまで nil にしない。
+    private var spaceCheckTask: Task<Void, Never>?
+    private var isSelfCheck = false
+    private var simulatedSpaceChecks: [Bool] = []
 
     public init(
         viewModel: CalendarPopoverViewModel,
@@ -51,7 +55,10 @@ public final class MenuBarController: NSObject {
         updateStatusItemButton()
         observeCountdown()
         countdown.start()
+        panel = makePanel()
+    }
 
+    private func makePanel() -> MenuBarPanel {
         let root = CalendarPopoverView(
             viewModel: viewModel,
             openSettings: { [weak self] in
@@ -64,7 +71,27 @@ public final class MenuBarController: NSObject {
         let panel = MenuBarPanel(rootView: root)
         panel.onResignKey = { [weak self] in self?.panelDidResignKey() }
         panel.onEscape = { [weak self] in self?.handleEscape() }
-        self.panel = panel
+        if isSelfCheck {
+            panel.alphaValue = 0
+            panel.ignoresMouseEvents = true
+            panel.allowsKey = false
+        }
+        return panel
+    }
+
+    /// パネルを新しいウインドウに作り直す。
+    ///
+    /// フルスクリーンの操作スペースの上で key にしたパネルは、`.canJoinAllSpaces` でも 1 つの操作スペースにしか属さなくなり、
+    /// 出し直しても今の操作スペースに出なくなることがある。collectionBehavior を設定し直しても戻らず、新しいウインドウなら戻る
+    /// （https://github.com/orkunisitmak/clipboardline/pull/255、https://github.com/MHusted01/shortcutlens/pull/160）。
+    private func replacePanel(reason: String) -> MenuBarPanel {
+        panelLog.notice("panel replaced: \(reason, privacy: .public)")
+        panel?.onResignKey = nil
+        panel?.onEscape = nil
+        panel?.orderOut(nil)
+        let fresh = makePanel()
+        panel = fresh
+        return fresh
     }
 
     /// 自己確認の通知の名前。`enableSelfCheck()` のあと、この通知を受けるたびにアイコンの押下と同じ処理を行う。
@@ -76,7 +103,13 @@ public final class MenuBarController: NSObject {
     /// パネルを完全に透明にし、マウスを通し、key にしない。`selfCheckToggleNotification` の分散通知を受けるたびに、
     /// アイコンの押下と同じ処理を行う。結果は panel カテゴリのログで確かめる。アプリは、起動時の環境変数
     /// `BARLUNARI_PANEL_SELF_CHECK=1` があるときだけ、このモードにする。
-    public func enableSelfCheck() {
+    ///
+    /// - Parameter simulatedSpaceChecks: 開いたあとにパネルが今の操作スペースにあるかを確かめるたびに、実際の値の代わりに先頭から
+    ///   1 つずつ使う値。フルスクリーンの操作スペースから外れたときの立て直しを、key にしないまま確かめるために使う。
+    ///   尽きたら実際の値を使う。このモードでは、立て直しでアプリを前面にしない。
+    public func enableSelfCheck(simulatedSpaceChecks: [Bool] = []) {
+        isSelfCheck = true
+        self.simulatedSpaceChecks = simulatedSpaceChecks
         guard let panel else { return }
         panel.alphaValue = 0
         panel.ignoresMouseEvents = true
@@ -135,7 +168,7 @@ public final class MenuBarController: NSObject {
     }
 
     private func open() {
-        guard let panel else { return }
+        guard var panel else { return }
         let displays = NSScreen.screens.map { DisplayGeometry(frame: $0.frame, visibleFrame: $0.visibleFrame) }
         guard let plan = PopoverPlacement.plan(
             click: NSEvent.mouseLocation,
@@ -143,15 +176,16 @@ public final class MenuBarController: NSObject {
             buttonFrame: statusItem?.button?.window?.frame,
             menuBarThickness: NSStatusBar.system.thickness
         ) else { return }
-        // 出す前に、出すディスプレイの領域を渡して大きさを決める。
         screenArea.update(plan.visibleArea)
-        panel.contentView?.layoutSubtreeIfNeeded()
-        panel.place(at: plan.anchor)
         isShown = true
         let wasHidden = NSApp.isHidden
         panel.unhideApplicationIfNeeded()
-        panel.orderFrontRegardless()
-        panel.makeKey()
+        show(panel, at: plan.anchor)
+        if !isOnActiveSpace(panel) {
+            // 前に開いたときに外れたままのパネルは、出しても今の操作スペースに出ない。
+            panel = replacePanel(reason: "not on the active Space after show")
+            show(panel, at: plan.anchor)
+        }
         installMonitors()
         panelLog.notice(
             "open frame=\(NSStringFromRect(panel.frame), privacy: .public) wasHidden=\(wasHidden) key=\(panel.isKeyWindow) active=\(NSApp.isActive) onActiveSpace=\(panel.isOnActiveSpace)"
@@ -164,19 +198,91 @@ public final class MenuBarController: NSObject {
                 )
             }
         }
+        scheduleSpaceCheck(anchor: plan.anchor)
+    }
+
+    private func show(_ panel: MenuBarPanel, at anchor: PopoverAnchor) {
+        // 出す前に、出すディスプレイの領域に合わせた大きさを決める。
+        panel.contentView?.layoutSubtreeIfNeeded()
+        panel.place(at: anchor)
+        panel.orderFrontRegardless()
+        panel.makeKey()
+    }
+
+    /// パネルが今の操作スペースにあるか。自己確認モードで値が指定されていれば、それを先頭から使う。
+    private func isOnActiveSpace(_ panel: MenuBarPanel) -> Bool {
+        if !simulatedSpaceChecks.isEmpty { return simulatedSpaceChecks.removeFirst() }
+        return panel.isOnActiveSpace
+    }
+
+    /// パネルがフルスクリーンの操作スペースから外れるまでの時間（約 0.3 秒）より少し長く待つ。
+    private static let spaceCheckDelay: Duration = .milliseconds(450)
+
+    /// 開いてから `spaceCheckDelay` ごとに、パネルが今の操作スペースにあるかを確かめ、外れていたら立て直す。
+    ///
+    /// フルスクリーンの操作スペースの上では、key になったパネルが約 0.3 秒後にその操作スペースから外れ、利用者には何も見えなくなる。
+    /// 操作スペースは切り替わらないので、通知では分からない。1 回目は、アプリを前面にして同じパネルを出し直す
+    /// （https://github.com/xiufengsun/TokenTracker/issues/681 と同じ対応）。2 回目は、パネルを作り直して出す。
+    /// それでも外れていれば、次の押下で開き直せるよう閉じる。
+    private func scheduleSpaceCheck(anchor: PopoverAnchor) {
+        spaceCheckTask?.cancel()
+        spaceCheckTask = Task { [weak self] in
+            for attempt in 1...3 {
+                try? await Task.sleep(for: Self.spaceCheckDelay)
+                guard !Task.isCancelled, let self, self.isShown, var panel = self.panel else { return }
+                guard !self.isOnActiveSpace(panel) else { break }
+                switch attempt {
+                case 1:
+                    if self.isSelfCheck {
+                        // 自己確認モードでは、利用者のフォーカスを変えないよう、アプリを前面にしない。
+                        panelLog.notice("activation skipped in self-check")
+                    } else {
+                        NSApp.activate()
+                    }
+                case 2:
+                    panel = self.replacePanel(reason: "left the active Space after activation")
+                default:
+                    panelLog.notice("panel stayed off the active Space")
+                    self.spaceCheckTask = nil
+                    self.close(.otherApp, trigger: "leftSpace")
+                    return
+                }
+                self.show(panel, at: anchor)
+                panelLog.notice("reshow attempt=\(attempt) key=\(panel.isKeyWindow) onActiveSpace=\(panel.isOnActiveSpace)")
+            }
+            guard !Task.isCancelled else { return }
+            self?.spaceCheckTask = nil
+        }
+    }
+
+    /// 開いたあとの確かめの途中で、パネルが今の操作スペースから外れているか。
+    ///
+    /// 外れたパネルは key でなくなり、元の前面のアプリが前面に戻る。これで閉じると立て直す前に閉じ、閉じた直後の押下は
+    /// `PopoverToggleGate` が閉じる操作として扱うので、押し直しても開かない。この間は閉じずに、立て直しの処理に任せる。
+    private var isRecoveringFromLeftSpace: Bool {
+        guard spaceCheckTask != nil, let panel else { return false }
+        return !panel.isOnActiveSpace
     }
 
     /// パネルを閉じる。閉じていれば何もしない。
-    func close(_ reason: PopoverCloseReason) {
+    ///
+    /// - Parameter trigger: ログに出す、閉じた契機の詳細。
+    func close(_ reason: PopoverCloseReason, trigger: String? = nil) {
         guard isShown else { return }
-        panelLog.notice("close reason=\(String(describing: reason), privacy: .public)")
+        panelLog.notice("close reason=\(String(describing: reason), privacy: .public) trigger=\(trigger ?? "-", privacy: .public)")
         isShown = false
+        spaceCheckTask?.cancel()
+        spaceCheckTask = nil
         gate.recordClose(reason, at: Date())
         removeMonitors()
         panel?.orderOut(nil)
     }
 
     private func panelDidResignKey() {
+        if isRecoveringFromLeftSpace {
+            panelLog.notice("close deferred: resignKey while off the active Space")
+            return
+        }
         close(.focusLoss)
     }
 
@@ -190,7 +296,7 @@ public final class MenuBarController: NSObject {
     private func installMonitors() {
         removeMonitors()
         globalMouseMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown]) { [weak self] _ in
-            MainActor.assumeIsolated { self?.close(.otherApp) }
+            MainActor.assumeIsolated { self?.close(.otherApp, trigger: "click") }
         }
         let center = NSWorkspace.shared.notificationCenter
         let ownIdentifier = Bundle.main.bundleIdentifier
@@ -198,12 +304,21 @@ public final class MenuBarController: NSObject {
             center.addObserver(forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main) { [weak self] notification in
                 let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication
                 let isOther = app?.bundleIdentifier != ownIdentifier
-                if isOther { MainActor.assumeIsolated { self?.close(.otherApp) } }
+                if isOther { MainActor.assumeIsolated { self?.closeUnlessRecovering(trigger: "activation") } }
             },
             center.addObserver(forName: NSWorkspace.activeSpaceDidChangeNotification, object: nil, queue: .main) { [weak self] _ in
-                MainActor.assumeIsolated { self?.close(.otherApp) }
+                MainActor.assumeIsolated { self?.closeUnlessRecovering(trigger: "spaceChange") }
             },
         ]
+    }
+
+    /// 別のアプリの前面化と操作スペースの切り替えで閉じる。パネルが今の操作スペースから外れて立て直している間は閉じない。
+    private func closeUnlessRecovering(trigger: String) {
+        if isRecoveringFromLeftSpace {
+            panelLog.notice("close deferred: \(trigger, privacy: .public) while off the active Space")
+            return
+        }
+        close(.otherApp, trigger: trigger)
     }
 
     private func removeMonitors() {
