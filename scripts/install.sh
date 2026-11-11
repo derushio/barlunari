@@ -33,14 +33,12 @@ rm -rf "$STAGING"
 ditto "$BUILT" "$STAGING"
 codesign --verify --strict "$STAGING"
 
-# このチェックアウトの build/Barlunari.app か /Applications/Barlunari.app から動いている Barlunari のプロセス ID を出す。
+# パスを問わず、バンドル ID が $BUNDLE_ID の動いているアプリのプロセス ID を出す。
+# 別のクローンの build/Barlunari.app から動いているコピーも終了させないと、メニューバーに項目が 2 つ出る。
 running_pids() {
-    local pid exe
-    for pid in $(pgrep -x Barlunari || true); do
-        exe="$(ps -o comm= -p "$pid" 2>/dev/null || true)"
-        case "$exe" in
-            "$DEST/Contents/MacOS/Barlunari" | "$BUILT/Contents/MacOS/Barlunari") echo "$pid" ;;
-        esac
+    local asn
+    for asn in $(lsappinfo find "bundleID=$BUNDLE_ID" | grep -oE 'ASN:0x[0-9a-f]+-0x[0-9a-f]+' || true); do
+        lsappinfo info -only pid "$asn" | awk '$1 == "pid" && $2 == "=" { print $3 }'
     done
 }
 
