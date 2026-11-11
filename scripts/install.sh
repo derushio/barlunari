@@ -62,7 +62,9 @@ fi
 rm -rf "$DEST"
 mv "$STAGING" "$DEST"
 "$LSREGISTER" -f "$DEST"
-"$LSREGISTER" -u "$BUILT"
+# 一度も起動していない build/Barlunari.app は LaunchServices に登録されておらず、-u は -10814 を出して 1 で終わる。
+# 登録されていなければ外すものがないので、失敗しても続ける。
+"$LSREGISTER" -u "$BUILT" 2>/dev/null || true
 rm -rf "$BUILT"
 
 open -g -j "$DEST"
