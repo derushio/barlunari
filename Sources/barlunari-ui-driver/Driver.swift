@@ -124,6 +124,8 @@ final class Driver {
                 harness.hidePanel()
             case "show":
                 harness.reopenPanel()
+            case "replace":
+                harness.replacePanel()
             case "placement":
                 return (try placement(words, command: command), false)
             case "wait":

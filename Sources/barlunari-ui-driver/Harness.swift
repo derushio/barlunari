@@ -35,7 +35,7 @@ final class Harness {
     private let footerActions = FooterActionLog()
     /// スリープからの復帰の通知を流す、注入したワークスペースの通知センター。
     private let workspaceNotificationCenter = NotificationCenter()
-    private let panel: MenuBarPanel
+    private var panel: MenuBarPanel
     /// 設定画面の ViewModel。ポップオーバーと同じ `DataChangeNotifier` を共有し、設定の変更がポップオーバーの再読み込みにつながる。
     private let settingsViewModel: SettingsViewModel
     private let showDeclinedEventsStore: InMemoryShowDeclinedEventsStore
@@ -174,9 +174,7 @@ final class Harness {
             openSystemSettings: openSystemSettings,
             changeNotifier: changeNotifier
         )
-        let root = CalendarPopoverView(viewModel: viewModel, openSettings: { [footerActions] in footerActions.openSettingsCount += 1 }, quit: { [footerActions] in footerActions.quitCount += 1 }, visibleFrame: Self.visibleFrame)
-            .background(Color(nsColor: .windowBackgroundColor))
-        panel = MenuBarPanel(rootView: root)
+        panel = MenuBarPanel(rootView: Self.panelRoot(viewModel: viewModel, footerActions: footerActions))
         panel.allowsKey = false
         panel.appearance = NSAppearance(named: .aqua)
         panel.place(at: Self.anchor())
@@ -301,6 +299,31 @@ final class Harness {
     /// このツールでは key にも前面にもしないよう、完全に透明な背面のまま `orderBack` で出す。
     func showPanel() {
         panel.orderBack(nil)
+    }
+
+    /// パネルを新しいウインドウに作り直して出す。アプリの `MenuBarController` が、今の操作スペースから外れたパネルを作り直すときと
+    /// 同じく、同じ ViewModel で新しい `CalendarPopoverView` を組み立てる。外観、置き場所、Esc の処理、透明・背面・マウスを通す設定は、
+    /// 古いパネルから引き継ぐ。
+    func replacePanel() {
+        let old = panel
+        let fresh = MenuBarPanel(rootView: Self.panelRoot(viewModel: viewModel, footerActions: footerActions))
+        fresh.allowsKey = false
+        fresh.appearance = old.appearance
+        fresh.onEscape = old.onEscape
+        fresh.alphaValue = old.alphaValue
+        fresh.ignoresMouseEvents = old.ignoresMouseEvents
+        fresh.level = old.level
+        fresh.collectionBehavior = old.collectionBehavior
+        if let anchor = old.anchor { fresh.place(at: anchor) }
+        old.onEscape = nil
+        old.orderOut(nil)
+        panel = fresh
+        reopenPanel()
+    }
+
+    private static func panelRoot(viewModel: CalendarPopoverViewModel, footerActions: FooterActionLog) -> some View {
+        CalendarPopoverView(viewModel: viewModel, openSettings: { [footerActions] in footerActions.openSettingsCount += 1 }, quit: { [footerActions] in footerActions.quitCount += 1 }, visibleFrame: visibleFrame)
+            .background(Color(nsColor: .windowBackgroundColor))
     }
 
     /// パネルを出し直し、開いたときの処理を行う。アプリでは、パネルが key になったことが `popoverDidAppear()` を呼ぶ。
