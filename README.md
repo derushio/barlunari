@@ -74,17 +74,18 @@
 ```sh
 git clone https://github.com/derushio/barlunari
 cd barlunari
-scripts/bundle.sh                  # Barlunari.app を組み立てます
-open -g -j <Barlunari.app のパス>    # 前面に出さずに起動します
+scripts/install.sh                 # Barlunari.app を組み立てて /Applications に入れ、起動します
 ```
+
+`scripts/install.sh` は、動いている Barlunari を終了させてから `/Applications/Barlunari.app` を置き換え、前面に出さずに起動します。新しい版にするときは、`git pull` してからもう一度実行します。組み立てに使った `build/Barlunari.app` は削除します。同じアプリが 2 か所にあると、macOS が別のほうを開いたり、別のほうに許可を付けたりするためです。設定と許可は引き継がれます。ログイン時に起動する設定にしている場合は、起動したときに `/Applications/Barlunari.app` を登録し直します。
 
 Claude Code を使っている場合は、次のように頼むと、クローンから起動までを Claude Code が実行します。
 
 ```text
-https://github.com/derushio/barlunari をクローンして、Barlunari.app を組み立てて起動して
+https://github.com/derushio/barlunari をクローンして、scripts/install.sh で Barlunari.app を /Applications に入れて起動して
 ```
 
-`scripts/bundle.sh` は、`Barlunari.app` を自己署名の証明書で署名します。証明書は、初めて実行したときに `~/Library/Application Support/Barlunari Signing/` の専用のキーチェーンに作られ、以降は同じ証明書で署名します。ログインキーチェーンとキーチェーンの検索リストは変更しません。毎回同じ証明書で署名するので、ビルドし直してもカレンダーへのアクセスの許可は残ります。このディレクトリを削除すると証明書が作り直されるので、下の手順でもう一度許可します。
+`scripts/install.sh` が使う `scripts/bundle.sh` は、`Barlunari.app` を自己署名の証明書で署名します。証明書は、初めて実行したときに `~/Library/Application Support/Barlunari Signing/` の専用のキーチェーンに作られ、以降は同じ証明書で署名します。ログインキーチェーンとキーチェーンの検索リストは変更しません。毎回同じ証明書で署名するので、ビルドし直してもカレンダーへのアクセスの許可は残ります。このディレクトリを削除すると証明書が作り直されるので、下の手順でもう一度許可します。
 
 ## 予定を表示する準備
 

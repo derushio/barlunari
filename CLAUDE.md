@@ -11,7 +11,8 @@ swift build                                        # ビルド
 swift test                                         # 全テスト。ヘッドレスで実行されます
 swift run barlunari-snapshots .playwright/snapshots # View を PNG に出力します。画面には表示しません
 swift build --product barlunari-ui-driver           # AIUI テスト用の操作ツールをビルドします。使い方は headless-testing スキルです
-scripts/bundle.sh                                  # .app を組み立てます
+scripts/bundle.sh                                  # build/Barlunari.app を組み立てます
+scripts/install.sh                                 # 組み立てて /Applications に入れ、起動し直します。main のチェックアウトでだけ動きます
 open -g -j <Barlunari.app のパス>                    # 起動確認。前面に出しません
 ```
 
@@ -105,7 +106,9 @@ BarlunariApp ──► Presentation ──► Application ──► Domain
 
 ### ship
 
-- ship は、GitHub の `derushio/barlunari` の `main` へのマージまでを指します
+- ship は、GitHub の `derushio/barlunari` の `main` へのマージと、`/Applications/Barlunari.app` への納品までを指します
+- 納品は、マージのあと main のチェックアウトで `git pull` し、`scripts/install.sh` を実行して行います。`scripts/install.sh` は、動いている Barlunari を終了させて `/Applications/Barlunari.app` を置き換え、`build/Barlunari.app` を削除して、`/Applications/Barlunari.app` を起動し直します
+- 常駐させるのは `/Applications/Barlunari.app` だけにします。main のチェックアウトの `build/Barlunari.app` は同じバンドル ID を持つので、残したり起動したりしません
 - App Store には配信しません。App Store Connect への提出、公証、配布用の署名は行いません
 
 ### 文章と用語

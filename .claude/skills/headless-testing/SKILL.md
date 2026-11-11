@@ -141,7 +141,8 @@ swift -e 'import Foundation; DistributedNotificationCenter.default().postNotific
 - 自己確認モードのパネルは、完全に透明で、マウスを通し、key にならない。利用者の画面とフォーカスは変わらない
 - ログの `open+0.3s visible=true occluded=false` で、パネルが画面に出たことを確かめる。`wasHidden` は、開く前にアプリが隠されていたか
 - フルスクリーンの操作スペースから外れたパネルの立て直しは、`--env BARLUNARI_PANEL_SELF_CHECK_SPACE=1,0,0` のように、今の操作スペースにあるかの確かめの結果を `1` と `0` の並びで渡して確かめる。開いた直後、0.45 秒後、0.9 秒後、1.35 秒後の確かめに先頭から使い、尽きたら実際の値を使う。ログの `reshow attempt=`、`panel replaced:`、`panel stayed off the active Space` で、どの立て直しを行ったかが分かる。このモードでは、立て直しでアプリを前面にしない
-- 確かめ終えたら、環境変数なしで `open -g -j build/Barlunari.app` で起動し直す
+- 自己確認は worktree で組み立てた `.app` で行う。worktree の `.app` は別のバンドル ID を持つので、常駐している `/Applications/Barlunari.app` と設定と許可を共有しない
+- 確かめ終えたら、自己確認モードで起動したプロセスを `pkill -f <worktree のパス>/build/Barlunari.app` で終了させる。常駐させるのは `/Applications/Barlunari.app` だけにする
 - key になること、Esc、外のクリックで閉じること、フルスクリーンのアプリの上に出ることは、このモードでは確かめられない。利用者が実際に使ったときの panel カテゴリのログで確かめる
 
 ## 実行コマンド
