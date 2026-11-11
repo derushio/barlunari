@@ -24,11 +24,9 @@ public struct CountdownTargetPolicy: Sendable, Hashable {
         !event.schedule.isAllDay
     }
 
-    /// 予定ごとの選択がないときの値。対象になりえない予定と、含めないカレンダーの予定は対象外、それ以外は予定の種類の既定の値。
+    /// 予定ごとの選択がないときの値。対象になりえない予定と、含めないカレンダーの予定は対象外、それ以外は対象。
     public func isTargetByDefault(_ event: CalendarEvent) -> Bool {
-        canBeTarget(event)
-            && calendars.isIncluded(event.calendarIdentity)
-            && CountdownTargetSettings.isTargetByDefault(event.schedule)
+        canBeTarget(event) && calendars.isIncluded(event.calendarIdentity)
     }
 
     /// 予定を残り時間の対象にするか。対象になりえない予定は `false`。それ以外は、予定ごとの選択があればそれ、なければ `isTargetByDefault(_:)`。

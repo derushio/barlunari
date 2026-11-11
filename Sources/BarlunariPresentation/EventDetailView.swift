@@ -140,19 +140,19 @@ struct EventDetailView: View {
                 // チェックボックスの部品は文字 1 行より下に高い。その分を打ち消し、行の間隔をほかの行と同じにする。
                 .padding(.bottom, -Self.checkboxExtraHeight)
             } else {
-                // 操作できないチェックボックスは出さず、含めない理由を文で示す。
+                // 操作できないチェックボックスは出さず、含めない理由を文で示す。辞退とカレンダーの説明はチェックボックスの状態を補う文なので、ここでは出さない。
                 Text("終日の予定は残り時間に含めません")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .padding(.leading, Self.iconColumnWidth + Self.iconTextSpacing)
             }
-            if detail.isDeclined {
+            if detail.canBeCountdownTarget && detail.isDeclined {
                 Text("辞退した予定は残り時間に含めません")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .padding(.leading, Self.iconColumnWidth + Self.iconTextSpacing)
             }
-            if detail.isCalendarExcludedFromCountdown {
+            if detail.canBeCountdownTarget && detail.isCalendarExcludedFromCountdown {
                 // チェックがオンの予定は、カレンダーの設定より予定ごとの選択が優先されて数えている。文がチェックの状態と食い違って読めないよう、状態ごとに出し分ける。
                 Text(
                     detail.includedInCountdown
